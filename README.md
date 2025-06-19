@@ -18,10 +18,11 @@ This repository provides utilities for replicating a QGIS workflow in Python and
 
 ### Running locally
 
-Install the dependencies (requires Python 3.11):
+Install the dependencies (requires Python 3.11). The `requirements.txt` file includes
+`python-multipart`, which FastAPI needs to handle file uploads:
 
 ```bash
-pip install geopandas folium osmnet fastapi uvicorn
+pip install -r requirements.txt
 ```
 
 Start the API:
