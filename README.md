@@ -18,10 +18,14 @@ This repository provides utilities for replicating a QGIS workflow in Python and
 
 ### Running locally
 
-Install the dependencies (requires Python 3.11). The `requirements.txt` file includes
-`python-multipart`, which FastAPI needs to handle file uploads:
+Clone the repository and install the dependencies (requires Python 3.11). The
+`requirements.txt` file includes `python-multipart`, which FastAPI needs to
+handle file uploads. If you use a virtual environment, activate it before
+installing the packages.
 
 ```bash
+git clone <repo-url>
+cd Cabling
 pip install -r requirements.txt
 ```
 
