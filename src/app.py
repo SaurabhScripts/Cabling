@@ -1,4 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import geopandas as gpd
 from pathlib import Path
 import tempfile
@@ -7,6 +9,15 @@ from .workflow import create_extent, download_osm_layer, merge_layers, buffer_an
 from .crossings import load_osm_roads, load_osm_powerlines, count_crossings
 
 app = FastAPI()
+
+static_dir = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    index_path = static_dir / "index.html"
+    return index_path.read_text()
 
 
 @app.post("/process/")

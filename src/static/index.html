@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cabling Processor</title>
+<style>
+body{font-family:Arial, sans-serif; margin:2rem;}
+label{display:block;margin-top:1rem;}
+#map-container{margin-top:2rem;}
+</style>
+</head>
+<body>
+<h1>Cabling Processor</h1>
+<form id="upload-form">
+<label>Turbines file: <input type="file" id="turbines" name="turbines" required></label>
+<label>Obstacles file: <input type="file" id="obstacles" name="obstacles" required></label>
+<button type="submit">Process</button>
+</form>
+<div id="results"></div>
+<div id="map-container"></div>
+<script>
+const form = document.getElementById('upload-form');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const formData = new FormData();
+  formData.append('turbines', document.getElementById('turbines').files[0]);
+  formData.append('obstacles', document.getElementById('obstacles').files[0]);
+  document.getElementById('results').textContent = 'Processing...';
+  const response = await fetch('/process/', { method: 'POST', body: formData });
+  if (!response.ok) {
+    document.getElementById('results').textContent = 'Error processing files';
+    return;
+  }
+  const data = await response.json();
+  const kmzBlob = new Blob([Uint8Array.from(Buffer.from(data.kmz, 'hex'))], {type: 'application/vnd.google-earth.kmz'});
+  const kmzUrl = URL.createObjectURL(kmzBlob);
+  const downloadLink = `<a href="${kmzUrl}" download="obstacles.kmz">Download KMZ</a>`;
+  document.getElementById('results').innerHTML = `Road crossings: ${data.road_crossings}<br>Power crossings: ${data.power_crossings}<br>${downloadLink}`;
+  document.getElementById('map-container').innerHTML = data.map;
+});
+</script>
+</body>
+</html>
