@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import geopandas as gpd
 import pandas as pd
@@ -7,6 +7,7 @@ from shapely.geometry import box, LineString, Point
 from shapely.ops import unary_union
 import requests
 import folium
+import yaml
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
@@ -72,10 +73,42 @@ def buffer_and_union(gdf: gpd.GeoDataFrame, distance: float) -> gpd.GeoSeries:
 def export_kmz(gdf: gpd.GeoDataFrame, path: Path) -> None:
     gdf.to_file(path, driver='KML')
 
-
-def export_folium_map(gdf: gpd.GeoDataFrame, path: Path) -> None:
+def export_folium_map(layers: Dict[str, gpd.GeoDataFrame], path: Path) -> None:
+    """Export a Folium map with multiple layers and layer control."""
     fmap = folium.Map()
-    folium.GeoJson(gdf).add_to(fmap)
+    for name, layer in layers.items():
+        if layer.empty:
+            continue
+        folium.GeoJson(layer, name=name).add_to(fmap)
+    folium.LayerControl().add_to(fmap)
     fmap.save(str(path))
+
+
+def csv_to_yaml(csv_path: Path, yaml_path: Path) -> None:
+    """Convert a CSV file to a YAML representation."""
+    df = pd.read_csv(csv_path)
+    records = df.to_dict(orient="records")
+    with open(yaml_path, "w") as f:
+        yaml.safe_dump(records, f)
+
+
+def load_csv_points(path: Path) -> gpd.GeoDataFrame:
+    """Load a CSV with latitude/longitude columns into a GeoDataFrame."""
+    df = pd.read_csv(path)
+    lat_col = next((c for c in df.columns if c.lower() in {"lat", "latitude", "y"}), None)
+    lon_col = next((c for c in df.columns if c.lower() in {"lon", "long", "longitude", "x"}), None)
+    if not lat_col or not lon_col:
+        raise ValueError("CSV must contain latitude/longitude columns")
+    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df[lon_col], df[lat_col]), crs=4326)
+    return gdf
+
+
+def generate_simple_route(turbines: gpd.GeoDataFrame, substation: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Create simple lines from the substation to each turbine."""
+    if turbines.empty or substation.empty:
+        return gpd.GeoDataFrame(geometry=[], crs=4326)
+    start = substation.geometry.iloc[0]
+    lines = [LineString([start, pt]) for pt in turbines.geometry]
+    return gpd.GeoDataFrame(geometry=lines, crs=4326)
 
 
