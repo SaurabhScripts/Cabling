@@ -7,13 +7,13 @@ This repository provides utilities for replicating a QGIS workflow in Python and
 - **Workflow functions** (`src/workflow.py`)
   - Download OSM layers inside an extent
   - Merge and buffer obstacles
-  - Export KMZ and Folium maps
+  - Export Folium maps
 - **Crossing utilities** (`src/crossings.py`)
   - Load road and power line data from OSM
   - Count the number of crossings with a cable route
 - **Web API** (`src/app.py`)
   - Upload turbine and obstacle files (e.g., GeoPackage)
-  - Generate combined obstacle layers and return KMZ/Folium map
+  - Generate combined obstacle layers and return a Folium map
   - Report road and power line crossing counts
 
 ### Running locally

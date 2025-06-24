@@ -32,10 +32,7 @@ form.addEventListener('submit', async (e) => {
     return;
   }
   const data = await response.json();
-  const kmzBlob = new Blob([Uint8Array.from(Buffer.from(data.kmz, 'hex'))], {type: 'application/vnd.google-earth.kmz'});
-  const kmzUrl = URL.createObjectURL(kmzBlob);
-  const downloadLink = `<a href="${kmzUrl}" download="obstacles.kmz">Download KMZ</a>`;
-  document.getElementById('results').innerHTML = `Road crossings: ${data.road_crossings}<br>Power crossings: ${data.power_crossings}<br>${downloadLink}`;
+  document.getElementById('results').innerHTML = `Road crossings: ${data.road_crossings}<br>Power crossings: ${data.power_crossings}`;
   document.getElementById('map-container').innerHTML = data.map;
 });
 </script>
