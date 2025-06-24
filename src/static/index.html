@@ -2,40 +2,55 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Cabling Processor</title>
+<title>Wind Route Planner</title>
 <style>
-body{font-family:Arial, sans-serif; margin:2rem;}
+body{font-family:Arial, sans-serif;margin:0;padding:0;text-align:center;}
+#landing{background:url('https://images.unsplash.com/photo-1587502536263-3e7a834f8752?auto=format&fit=crop&w=1350&q=80') center/cover no-repeat;height:300px;display:flex;align-items:center;justify-content:center;}
+#start-btn{padding:1rem 2rem;font-size:1.2rem;cursor:pointer;}
+#process{margin:2rem;display:none;}
 label{display:block;margin-top:1rem;}
 #map-container{margin-top:2rem;}
 </style>
 </head>
 <body>
-<h1>Cabling Processor</h1>
+<div id="landing">
+<button id="start-btn">Start Planning</button>
+</div>
+<div id="process">
+<h2>Upload Data</h2>
 <form id="upload-form">
-<label>Turbines file: <input type="file" id="turbines" name="turbines" required></label>
-<label>Obstacles file: <input type="file" id="obstacles" name="obstacles" required></label>
-<button type="submit">Process</button>
+<label>Wind turbines CSV: <input type="file" id="turbines" name="turbines" required></label>
+<label>Substation CSV: <input type="file" id="substation" name="substation" required></label>
+<label>Obstacles (GPKG): <input type="file" id="obstacles" name="obstacles" required></label>
+<button type="submit">Generate Route</button>
 </form>
-<div id="results"></div>
+<pre id="yaml-results"></pre>
 <div id="map-container"></div>
+</div>
 <script>
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('process').style.display = 'block';
+});
 const form = document.getElementById('upload-form');
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const formData = new FormData();
   formData.append('turbines', document.getElementById('turbines').files[0]);
+  formData.append('substation', document.getElementById('substation').files[0]);
   formData.append('obstacles', document.getElementById('obstacles').files[0]);
-  document.getElementById('results').textContent = 'Processing...';
+  document.getElementById('yaml-results').textContent = 'Processing...';
   const response = await fetch('/process/', { method: 'POST', body: formData });
   if (!response.ok) {
-    document.getElementById('results').textContent = 'Error processing files';
+    document.getElementById('yaml-results').textContent = 'Error processing files';
     return;
   }
   const data = await response.json();
-  const kmzBlob = new Blob([Uint8Array.from(Buffer.from(data.kmz, 'hex'))], {type: 'application/vnd.google-earth.kmz'});
+  document.getElementById('yaml-results').textContent =
+    'Turbine YAML:\n' + data.turbine_yaml + '\n\nSubstation YAML:\n' + data.substation_yaml;
+  const kmzBlob = new Blob([Uint8Array.from(Buffer.from(data.route_kmz, 'hex'))], {type: 'application/vnd.google-earth.kmz'});
   const kmzUrl = URL.createObjectURL(kmzBlob);
-  const downloadLink = `<a href="${kmzUrl}" download="obstacles.kmz">Download KMZ</a>`;
-  document.getElementById('results').innerHTML = `Road crossings: ${data.road_crossings}<br>Power crossings: ${data.power_crossings}<br>${downloadLink}`;
+  document.getElementById('yaml-results').innerHTML += '\n<br><a href="' + kmzUrl + '" download="route.kmz">Download Route</a>';
   document.getElementById('map-container').innerHTML = data.map;
 });
 </script>
