@@ -15,9 +15,6 @@ import tempfile
 
 from .workflow import (
     create_extent,
-    download_osm_layer,
-    merge_layers,
-    buffer_and_union,
     export_kmz,
     export_folium_map,
     csv_to_yaml,
@@ -46,42 +43,66 @@ async def map_page():
 
 @app.post("/process/")
 async def process_files(
-    turbines: UploadFile = File(...),
-    substation: UploadFile = File(...),
-    obstacles: UploadFile = File(...),
+    turbines: UploadFile | None = File(None),
+    substation: UploadFile | None = File(None),
+    obstacles: UploadFile | None = File(None),
 ):
     """Process uploaded files and return YAML strings, KMZ route and map."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        turbine_path = Path(tmpdir) / turbines.filename
-        sub_path = Path(tmpdir) / substation.filename
-        obstacle_path = Path(tmpdir) / obstacles.filename
+        if turbines:
+            turbine_path = Path(tmpdir) / turbines.filename
+            with open(turbine_path, "wb") as f:
+                f.write(await turbines.read())
+            turbines_gdf = load_csv_points(turbine_path)
+        else:
+            turbines_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
-        with open(turbine_path, "wb") as f:
-            f.write(await turbines.read())
-        with open(sub_path, "wb") as f:
-            f.write(await substation.read())
-        with open(obstacle_path, "wb") as f:
-            f.write(await obstacles.read())
+        if substation:
+            sub_path = Path(tmpdir) / substation.filename
+            with open(sub_path, "wb") as f:
+                f.write(await substation.read())
+            substation_gdf = load_csv_points(sub_path)
+        else:
+            substation_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
-        turbines_gdf = load_csv_points(turbine_path)
-        substation_gdf = load_csv_points(sub_path)
-        obstacle_gdf = gpd.read_file(obstacle_path)
+        if obstacles:
+            obstacle_path = Path(tmpdir) / obstacles.filename
+            with open(obstacle_path, "wb") as f:
+                f.write(await obstacles.read())
+            obstacle_gdf = gpd.read_file(obstacle_path)
+        else:
+            obstacle_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
-        # create YAML outputs
+        # create YAML outputs if data provided
         turbine_yaml = Path(tmpdir) / "turbines.yaml"
         substation_yaml = Path(tmpdir) / "substation.yaml"
-        csv_to_yaml(turbine_path, turbine_yaml)
-        csv_to_yaml(sub_path, substation_yaml)
+        if turbines:
+            csv_to_yaml(turbine_path, turbine_yaml)
+            turbine_yaml_text = turbine_yaml.read_text()
+        else:
+            turbine_yaml_text = ""
+        if substation:
+            csv_to_yaml(sub_path, substation_yaml)
+            substation_yaml_text = substation_yaml.read_text()
+        else:
+            substation_yaml_text = ""
 
-        # extent layer
-        extent = create_extent(turbines_gdf)
-        extent_gdf = gpd.GeoDataFrame(geometry=[box(*extent)], crs=4326)
+        # extent layer based on available data
+        extent_source = turbines_gdf
+        if extent_source.empty and not substation_gdf.empty:
+            extent_source = substation_gdf
+        if extent_source.empty and not obstacle_gdf.empty:
+            extent_source = obstacle_gdf
+        if not extent_source.empty:
+            extent = create_extent(extent_source)
+            extent_gdf = gpd.GeoDataFrame(geometry=[box(*extent)], crs=4326)
+        else:
+            extent = (0, 0, 0, 0)
+            extent_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
         # obstacles processing similar to original example
-        roads = load_osm_roads(extent)
-        power = load_osm_powerlines(extent)
-        obstacles_combined = merge_layers([obstacle_gdf, roads, power])
-        obstacle_union = buffer_and_union(obstacles_combined, 20)
+        roads = load_osm_roads(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
+        power = load_osm_powerlines(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
 
         # simple route generation
         route_gdf = generate_simple_route(turbines_gdf, substation_gdf)
@@ -100,11 +121,11 @@ async def process_files(
         map_path = Path(tmpdir) / "map.html"
         export_folium_map(map_layers, map_path)
 
-        road_cross, power_cross = count_crossings(route_gdf, roads, power)
+        road_cross, power_cross = count_crossings(route_gdf, roads, power) if not route_gdf.empty else (0, 0)
 
         return {
-            "turbine_yaml": turbine_yaml.read_text(),
-            "substation_yaml": substation_yaml.read_text(),
+            "turbine_yaml": turbine_yaml_text,
+            "substation_yaml": substation_yaml_text,
             "route_kmz": kmz_path.read_bytes().hex(),
             "map": map_path.read_text(),
             "road_crossings": road_cross,

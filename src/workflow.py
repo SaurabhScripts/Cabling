@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, List, Optional
+from zipfile import ZipFile
 
 import geopandas as gpd
 import pandas as pd
@@ -59,19 +60,26 @@ def create_extent(points: gpd.GeoDataFrame, buffer: float = 0.01) -> tuple[float
 
 
 def merge_layers(layers: List[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
+    """Merge multiple GeoDataFrames into a single 4326 layer."""
     combined = gpd.GeoDataFrame(pd.concat(layers, ignore_index=True))
     combined.set_crs(epsg=4326, inplace=True)
     return combined
 
 
 def buffer_and_union(gdf: gpd.GeoDataFrame, distance: float) -> gpd.GeoSeries:
+    """Return a single geometry unioned from the layer buffered by *distance*."""
     buffered = gdf.to_crs(3857).buffer(distance).to_crs(4326)
     unioned = unary_union(buffered)
     return gpd.GeoSeries([unioned], crs=4326)
 
 
 def export_kmz(gdf: gpd.GeoDataFrame, path: Path) -> None:
-    gdf.to_file(path, driver='KML')
+    """Write *gdf* to a KMZ archive at *path*."""
+    kml_path = path.with_suffix('.kml')
+    gdf.to_file(kml_path, driver='KML')
+    with ZipFile(path, 'w') as zf:
+        zf.write(kml_path, arcname=kml_path.name)
+    kml_path.unlink()
 
 def export_folium_map(layers: Dict[str, gpd.GeoDataFrame], path: Path) -> None:
     """Export a Folium map with multiple layers and layer control."""
