@@ -11,27 +11,42 @@ body{font-family:Arial, sans-serif;margin:0;padding:0;}
 </head>
 <body>
 <div id="upload">
-<label>Upload Turbine Excel/CSV: <input type="file" id="tfile"></label>
-<span id="status"></span>
+  <label>Turbines CSV/XLSX: <input type="file" id="turbines"></label>
+  <label>Substation CSV: <input type="file" id="substation"></label>
+  <label>Obstacles file: <input type="file" id="obstacles"></label>
+  <button id="process-btn">Process</button>
+  <span id="status"></span>
 </div>
 <div id="map-container"></div>
 <script>
-const input = document.getElementById('tfile');
-input.addEventListener('change', async () => {
-  const file = input.files[0];
-  if (!file) return;
+const turbinesInput = document.getElementById('turbines');
+const substationInput = document.getElementById('substation');
+const obstaclesInput = document.getElementById('obstacles');
+
+function hexToBytes(hex){
+  const arr = new Uint8Array(hex.length/2);
+  for(let i=0;i<arr.length;i++){
+    arr[i] = parseInt(hex.substr(i*2,2),16);
+  }
+  return arr;
+}
+
+document.getElementById('process-btn').addEventListener('click', async () => {
   const fd = new FormData();
-  fd.append('file', file);
+  if (turbinesInput.files[0]) fd.append('turbines', turbinesInput.files[0]);
+  if (substationInput.files[0]) fd.append('substation', substationInput.files[0]);
+  if (obstaclesInput.files[0]) fd.append('obstacles', obstaclesInput.files[0]);
+  if (![...fd.keys()].length) return;
   document.getElementById('status').textContent = 'Processing...';
-  const resp = await fetch('/turbine-kml/', {method:'POST', body: fd});
+  const resp = await fetch('/process/', {method:'POST', body: fd});
   if (!resp.ok){
     document.getElementById('status').textContent = 'Error processing file';
     return;
   }
   const data = await resp.json();
-  const kmlBlob = new Blob([Uint8Array.from(Buffer.from(data.kml, 'hex'))], {type:'application/vnd.google-earth.kml+xml'});
-  const kmlUrl = URL.createObjectURL(kmlBlob);
-  document.getElementById('status').innerHTML = '<a href="'+kmlUrl+'" download="turbines.kml">Download KML</a>';
+  const kmzBlob = new Blob([hexToBytes(data.route_kmz)], {type:'application/vnd.google-earth.kmz'});
+  const kmzUrl = URL.createObjectURL(kmzBlob);
+  document.getElementById('status').innerHTML = '<a href="'+kmzUrl+'" download="route.kmz">Download KMZ</a>';
   document.getElementById('map-container').innerHTML = data.map;
 });
 </script>

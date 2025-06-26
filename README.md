@@ -36,5 +36,5 @@ python -m src
 ```
 
 This will launch a FastAPI server on `http://localhost:8000`.
-Open `http://localhost:8000` in your browser to use the interactive interface for uploading turbine and obstacle files.
-The interface sends the files to the `/process/` endpoint and displays the resulting map and crossing counts.
+Open `http://localhost:8000` in your browser to use the interactive interface for uploading turbine, substation and obstacle files.
+The interface sends the selected files to the `/process/` endpoint and displays the resulting map and crossing counts.

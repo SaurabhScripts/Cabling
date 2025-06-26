@@ -1,8 +1,4 @@
-from pathlib import Path
-from typing import List
-
 import geopandas as gpd
-from shapely.geometry import LineString
 
 from .workflow import download_osm_layer
 
@@ -25,10 +21,12 @@ def count_crossings(route: gpd.GeoDataFrame, roads: gpd.GeoDataFrame, lines: gpd
 
 
 def load_osm_roads(bbox: tuple[float, float, float, float]) -> gpd.GeoDataFrame:
+    """Download major road features from OpenStreetMap within *bbox*."""
     return download_osm_layer(bbox, "highway", ROAD_TYPES)
 
 
 def load_osm_powerlines(bbox: tuple[float, float, float, float]) -> gpd.GeoDataFrame:
+    """Download power line features from OpenStreetMap within *bbox*."""
     return download_osm_layer(bbox, "power", POWER_LINE_TYPES)
 
 
