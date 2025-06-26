@@ -186,6 +186,9 @@ async def upload_excel(file: UploadFile = File(...)):
         else:
             gdf = gpd.read_file(fpath)
 
+        if gdf.crs and gdf.crs.to_epsg() != 4326:
+            gdf = gdf.to_crs(epsg=4326)
+
         extent_gdf = gpd.GeoDataFrame(geometry=[box(*gdf.total_bounds)], crs=4326)
 
         return {
