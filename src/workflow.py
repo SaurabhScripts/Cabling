@@ -334,7 +334,7 @@ def export_H_to_kml(
     include_nodes: bool = False,
     project_to_wgs84: tuple[str, str] | None = None,
 ) -> None:
-    """Export a routed graph *H* to KML.
+    """Export graph ``H`` to KML, coloring each cable by its ``cable`` index.
 
     The function is a lightweight wrapper around :mod:`simplekml` that draws
     each edge of ``H`` and colours it by the ``cable`` attribute.  Optionally the
@@ -386,7 +386,7 @@ def export_H_to_kml(
             lon, lat = transformer.transform(x, y)
             pos[n] = (lon, lat)
 
-    color_map = {
+    cable_color_map = {
         0: simplekml.Color.blue,
         1: simplekml.Color.green,
         2: simplekml.Color.orange,
@@ -407,7 +407,7 @@ def export_H_to_kml(
         line = kml.newlinestring(
             name=f"cable_{idx}", coords=[(lon1, lat1), (lon2, lat2)]
         )
-        line.style.linestyle.color = color_map.get(idx, simplekml.Color.gray)
+        line.style.linestyle.color = cable_color_map.get(idx, simplekml.Color.gray)
         line.style.linestyle.width = 3
 
     if include_nodes:
@@ -421,11 +421,12 @@ def export_H_to_kml(
             else:
                 p.style.iconstyle.scale = 0.5
 
-    dst = Path(filepath)
-    if dst.suffix.lower() == ".kmz":
-        kml.savekmz(str(dst))
+    print(f"Drew {H.number_of_edges() - len(skipped)} edges; skipped {len(skipped)} invalid.")
+    if str(filepath).lower().endswith(".kmz"):
+        kml.savekmz(str(filepath))
     else:
-        kml.save(str(dst))
+        kml.save(str(filepath))
+    print("Wrote output to", filepath)
 
 
 def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
