@@ -10,6 +10,7 @@ from shapely.ops import unary_union
 import requests
 import folium
 import yaml
+import string
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
@@ -169,6 +170,49 @@ def load_yaml_points(path: Path) -> gpd.GeoDataFrame:
         crs=4326,
     )
     return gdf
+
+
+def gpkg_to_obstacles_yaml(gpkg_path: Path, yaml_path: Path) -> None:
+    """Convert obstacle polygons/lines from a GeoPackage to YAML format."""
+    gdf = gpd.read_file(gpkg_path)
+
+    items: list[str] = []
+    for _, row in gdf.iterrows():
+        geom = row.geometry
+        if geom is None:
+            continue
+        if geom.geom_type == "Polygon":
+            coords = list(geom.exterior.coords)
+        elif geom.geom_type in {"LineString", "LinearRing"}:
+            coords = list(geom.coords)
+        else:
+            continue
+
+        lines = []
+        for i, (lon, lat) in enumerate(coords):
+            label = string.ascii_uppercase[i] if i < 26 else f"P{i}"
+            lat_deg = int(lat)
+            lat_min = (lat - lat_deg) * 60
+            lon_deg = int(lon)
+            lon_min = (lon - lon_deg) * 60
+            lat_dir = "N" if lat >= 0 else "S"
+            lon_dir = "E" if lon >= 0 else "W"
+            lines.append(
+                f"{label} {lat_deg}\u00B0{lat_min:.3f}''{lat_dir} "
+                f"{lon_deg}\u00B0{lon_min:.3f}''{lon_dir}"
+            )
+
+        if not lines:
+            continue
+        item_str = lines[0] + "\n  " + "\n  ".join(lines[1:])
+        items.append(item_str)
+
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        f.write("OBSTACLES:\n")
+        for item in items:
+            f.write(f"- '{item}'\n")
+
+
 
 
 

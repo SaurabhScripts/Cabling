@@ -8,6 +8,7 @@ This repository provides utilities for replicating a QGIS workflow in Python and
   - Download OSM layers inside an extent
   - Merge and buffer obstacles
   - Export KMZ and Folium maps
+  - Convert obstacle GeoPackage files to YAML
 - **Crossing utilities** (`src/crossings.py`)
   - Load road and power line data from OSM
   - Count the number of crossings with a cable route
@@ -38,6 +39,20 @@ python -m src
 This will launch a FastAPI server on `http://localhost:8000`.
 Open `http://localhost:8000` in your browser to use the interactive interface for uploading turbine, substation and obstacle files.
 The interface sends the selected files to the `/process/` endpoint and displays the resulting map and crossing counts.
+
+### Obstacles from GeoPackage
+
+To convert obstacle data stored in a GeoPackage into the YAML format used by the
+workflow, call `gpkg_to_obstacles_yaml`:
+
+```python
+from cabling import gpkg_to_obstacles_yaml
+
+gpkg_to_obstacles_yaml("obstacles.gpkg", "obstacles.yaml")
+```
+
+The resulting `obstacles.yaml` can then be merged with the turbine and
+substation data when building the site configuration.
 
 ### Quick map viewer
 
