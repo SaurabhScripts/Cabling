@@ -55,6 +55,55 @@ def download_osm_layer(
     return gdf
 
 
+def turbines_to_extents_yaml(turbines_yaml: Path, extents_yaml: Path) -> None:
+    """Create an ``extents.yaml`` file covering the turbine coordinates."""
+
+    data = yaml.safe_load(turbines_yaml.read_text(encoding="utf-8"))
+    turbines_block = data.get("TURBINES")
+
+    if isinstance(turbines_block, list):
+        lines = turbines_block
+    elif isinstance(turbines_block, str):
+        lines = [ln.strip() for ln in turbines_block.splitlines() if ln.strip()]
+    else:
+        raise RuntimeError("TURBINES field is neither list nor block string")
+
+    coords: list[tuple[float, float]] = []
+    for ln in lines:
+        parts = ln.split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        _, dms_str = parts
+        coords.append(_dms_to_decimal(dms_str))
+
+    if not coords:
+        raise RuntimeError("No valid turbine coordinates found")
+
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
+    max_lat, min_lat = max(lats), min(lats)
+    max_lon, min_lon = max(lons), min(lons)
+
+    def dec_to_dms(val: float, is_lat: bool) -> str:
+        deg = int(abs(val))
+        minutes = (abs(val) - deg) * 60
+        hemi = "N" if is_lat else "E"
+        if val < 0:
+            hemi = "S" if is_lat else "W"
+        return f"{deg}\u00b0{minutes:.3f}'{hemi}"
+
+    dms_A = dec_to_dms(max_lat, True), dec_to_dms(min_lon, False)
+    dms_B = dec_to_dms(max_lat, True), dec_to_dms(max_lon, False)
+    dms_C = dec_to_dms(min_lat, True), dec_to_dms(max_lon, False)
+    dms_D = dec_to_dms(min_lat, True), dec_to_dms(min_lon, False)
+
+    with open(extents_yaml, "w", encoding="utf-8") as f:
+        f.write("EXTENTS: |-\n")
+        f.write(f"  A {dms_A[0]} {dms_A[1]}\n")
+        f.write(f"  B {dms_B[0]} {dms_B[1]}\n")
+        f.write(f"  C {dms_C[0]} {dms_C[1]}\n")
+        f.write(f"  D {dms_D[0]} {dms_D[1]}\n")
+
 def create_extent(
     points: gpd.GeoDataFrame, buffer: float = 0.01
 ) -> tuple[float, float, float, float]:
