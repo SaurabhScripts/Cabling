@@ -71,6 +71,25 @@ You can also convert directly from the command line using
 ./convert_gpkg_to_kmz.py obstacles.gpkg obstacles.kmz
 ```
 
+### Generate extents from turbines
+
+If your turbine locations are already stored as a YAML block, use
+`turbines_to_extents_yaml` to create an `extents.yaml` bounding box. The
+helper writes the result to a temporary directory (``temp`` by default):
+
+```python
+from pathlib import Path
+from cabling import turbines_to_extents_yaml
+
+turbines_to_extents_yaml("turbines.yaml", Path("temp") / "extents.yaml")
+```
+
+There is also a small command line wrapper ``turbines_to_extents.py``:
+
+```bash
+./turbines_to_extents.py turbines.yaml --out-dir temp
+```
+
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.
