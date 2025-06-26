@@ -152,9 +152,27 @@ async def turbine_kml(file: UploadFile = File(...)):
         map_path = Path(tmpdir) / "map.html"
         export_folium_map({"Turbines": gdf}, map_path)
 
-        return {
+    return {
             "kml": kml_path.read_bytes().hex(),
             "yaml": yaml_path.read_text(),
             "map": map_path.read_text(),
         }
+
+
+@app.post("/upload")
+async def upload_excel(file: UploadFile = File(...)):
+    """Accept an Excel/KML file and return GeoJSON for map display."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fpath = Path(tmpdir) / file.filename
+        with open(fpath, "wb") as f:
+            f.write(await file.read())
+
+        suffix = fpath.suffix.lower()
+        if suffix in {".xlsx", ".xls", ".csv"}:
+            df = read_turbine_excel(fpath)
+            gdf = dataframe_to_gdf(df)
+        else:
+            gdf = gpd.read_file(fpath)
+
+        return {"geojson": gdf.__geo_interface__}
 
