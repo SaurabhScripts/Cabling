@@ -51,14 +51,20 @@ def dataframe_to_kml(df: pd.DataFrame, path: Path) -> None:
         code = index_to_code(i)
         name = f"Turbine {code}"
         desc = f"Loc_No: {row['Loc_No']}\nZone: {row['Zone']}"
-        kml.newpoint(name=name, coords=[(row["Longitude"], row["Latitude"])], description=desc)
+        kml.newpoint(
+            name=name,
+            coords=[(row["Longitude"], row["Latitude"])],
+            description=desc,
+        )
 
     kml.save(str(path))
 
 
 def dataframe_to_gdf(df: pd.DataFrame) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(
-        df, geometry=gpd.points_from_xy(df["Longitude"], df["Latitude"]), crs=4326
+        df,
+        geometry=gpd.points_from_xy(df["Longitude"], df["Latitude"]),
+        crs=4326,
     )
 
 
@@ -88,4 +94,3 @@ def dataframe_to_yaml(df: pd.DataFrame, path: Path) -> None:
         f.write('TURBINES: |-\n')
         for line in lines:
             f.write(f"  {line}\n")
-

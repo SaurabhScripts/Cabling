@@ -101,8 +101,16 @@ async def process_files(
             extent_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
         # obstacles processing similar to original example
-        roads = load_osm_roads(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
-        power = load_osm_powerlines(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
+        roads = (
+            load_osm_roads(extent)
+            if not extent_source.empty
+            else gpd.GeoDataFrame(geometry=[], crs=4326)
+        )
+        power = (
+            load_osm_powerlines(extent)
+            if not extent_source.empty
+            else gpd.GeoDataFrame(geometry=[], crs=4326)
+        )
 
         # simple route generation
         route_gdf = generate_simple_route(turbines_gdf, substation_gdf)
@@ -121,7 +129,11 @@ async def process_files(
         map_path = Path(tmpdir) / "map.html"
         export_folium_map(map_layers, map_path)
 
-        road_cross, power_cross = count_crossings(route_gdf, roads, power) if not route_gdf.empty else (0, 0)
+        road_cross, power_cross = (
+            count_crossings(route_gdf, roads, power)
+            if not route_gdf.empty
+            else (0, 0)
+        )
 
         return {
             "turbine_yaml": turbine_yaml_text,
@@ -157,4 +169,3 @@ async def turbine_kml(file: UploadFile = File(...)):
             "yaml": yaml_path.read_text(),
             "map": map_path.read_text(),
         }
-
