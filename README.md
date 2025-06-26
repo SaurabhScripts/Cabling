@@ -93,3 +93,5 @@ There is also a small command line wrapper ``turbines_to_extents.py``:
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.
+The routing endpoints (`/process/` and `/run-final/`) now return GeoJSON so the
+generated cable layouts can be displayed alongside turbines and substations.

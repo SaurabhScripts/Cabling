@@ -127,6 +127,7 @@ async def process_files(
 
         kmz_path = Path(tmpdir) / "route.kmz"
         export_kmz(route_gdf, kmz_path)
+        route_geojson = route_gdf.__geo_interface__
 
         # build map with all layers
         map_layers = {
@@ -147,6 +148,7 @@ async def process_files(
             "turbine_yaml": turbine_yaml_text,
             "substation_yaml": substation_yaml_text,
             "route_kmz": kmz_path.read_bytes().hex(),
+            "route_geojson": route_geojson,
             "map": map_path.read_text(),
             "road_crossings": road_cross,
             "power_crossings": power_cross,
@@ -164,11 +166,20 @@ async def run_final_route(site: UploadFile = File(...)):
         kmz_tmp = Path(tmpdir) / "route.kmz"
         generate_optimized_route(site_path, kmz_tmp)
 
+        # also load the KMZ as GeoJSON for easier visualisation
+        with ZipFile(kmz_tmp, "r") as zf:
+            kml_files = [n for n in zf.namelist() if n.lower().endswith(".kml")]
+            if not kml_files:
+                raise RuntimeError("Optimisation output contains no KML")
+            kml_path = Path(tmpdir) / kml_files[0]
+            zf.extract(kml_files[0], tmpdir)
+        gdf = gpd.read_file(kml_path)
+
         out_name = f"route_{uuid.uuid4().hex}.kmz"
         out_path = results_dir / out_name
         shutil.move(kmz_tmp, out_path)
 
-    return {"url": f"/results/{out_name}"}
+    return {"url": f"/results/{out_name}", "geojson": gdf.__geo_interface__}
 
 
 @app.post("/turbine-kml/")

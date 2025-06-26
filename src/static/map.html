@@ -163,9 +163,22 @@
         }
         const res = await fetch(endpoint, { method: 'POST', body: formData });
         const data = await res.json();
-        const kml = await kmzToKml(data.route_kmz);
         if (routeLayer) map.removeLayer(routeLayer);
-        routeLayer = omnivore.kml.parse(kml).addTo(map);
+        if (data.route_geojson) {
+          routeLayer = L.geoJSON(data.route_geojson, { style: { color: 'green' } }).addTo(map);
+        } else if (data.geojson) {
+          routeLayer = L.geoJSON(data.geojson, { style: { color: 'green' } }).addTo(map);
+        } else if (data.route_kmz) {
+          const kml = await kmzToKml(data.route_kmz);
+          routeLayer = omnivore.kml.parse(kml).addTo(map);
+        } else if (data.url) {
+          const kmzRes = await fetch(data.url);
+          const kmzBuf = await kmzRes.arrayBuffer();
+          const zip = await JSZip.loadAsync(kmzBuf);
+          const kmlName = Object.keys(zip.files).find(n => n.toLowerCase().endsWith('.kml'));
+          const kml = await zip.file(kmlName).async('string');
+          routeLayer = omnivore.kml.parse(kml).addTo(map);
+        }
         overlays['Route'] = routeLayer;
         updateLayers();
       });
