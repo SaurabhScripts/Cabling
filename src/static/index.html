@@ -14,44 +14,11 @@ label{display:block;margin-top:1rem;}
 </head>
 <body>
 <div id="landing">
-<button id="start-btn">Start Planning</button>
-</div>
-<div id="process">
-<h2>Upload Data</h2>
-<form id="upload-form">
-<label>Wind turbines CSV: <input type="file" id="turbines" name="turbines" required></label>
-<label>Substation CSV: <input type="file" id="substation" name="substation" required></label>
-<label>Obstacles (GPKG): <input type="file" id="obstacles" name="obstacles" required></label>
-<button type="submit">Generate Route</button>
-</form>
-<pre id="yaml-results"></pre>
-<div id="map-container"></div>
+  <button id="start-btn">Start Planning</button>
 </div>
 <script>
 document.getElementById('start-btn').addEventListener('click', () => {
-  document.getElementById('landing').style.display = 'none';
-  document.getElementById('process').style.display = 'block';
-});
-const form = document.getElementById('upload-form');
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const formData = new FormData();
-  formData.append('turbines', document.getElementById('turbines').files[0]);
-  formData.append('substation', document.getElementById('substation').files[0]);
-  formData.append('obstacles', document.getElementById('obstacles').files[0]);
-  document.getElementById('yaml-results').textContent = 'Processing...';
-  const response = await fetch('/process/', { method: 'POST', body: formData });
-  if (!response.ok) {
-    document.getElementById('yaml-results').textContent = 'Error processing files';
-    return;
-  }
-  const data = await response.json();
-  document.getElementById('yaml-results').textContent =
-    'Turbine YAML:\n' + data.turbine_yaml + '\n\nSubstation YAML:\n' + data.substation_yaml;
-  const kmzBlob = new Blob([Uint8Array.from(Buffer.from(data.route_kmz, 'hex'))], {type: 'application/vnd.google-earth.kmz'});
-  const kmzUrl = URL.createObjectURL(kmzBlob);
-  document.getElementById('yaml-results').innerHTML += '\n<br><a href="' + kmzUrl + '" download="route.kmz">Download Route</a>';
-  document.getElementById('map-container').innerHTML = data.map;
+  window.location.href = '/map';
 });
 </script>
 </body>

@@ -1,5 +1,12 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
+
+from .turbine_excel import (
+    read_turbine_excel,
+    dataframe_to_kml,
+    dataframe_to_yaml,
+    dataframe_to_gdf,
+)
 from fastapi.staticfiles import StaticFiles
 import geopandas as gpd
 from shapely.geometry import box
@@ -29,6 +36,12 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 async def root():
     index_path = static_dir / "index.html"
     return index_path.read_text()
+
+
+@app.get("/map", response_class=HTMLResponse)
+async def map_page():
+    map_path = static_dir / "map.html"
+    return map_path.read_text()
 
 
 @app.post("/process/")
@@ -96,5 +109,31 @@ async def process_files(
             "map": map_path.read_text(),
             "road_crossings": road_cross,
             "power_crossings": power_cross,
+        }
+
+
+@app.post("/turbine-kml/")
+async def turbine_kml(file: UploadFile = File(...)):
+    """Convert a turbine Excel/CSV to KML and return the map."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fpath = Path(tmpdir) / file.filename
+        with open(fpath, "wb") as f:
+            f.write(await file.read())
+
+        df = read_turbine_excel(fpath)
+        gdf = dataframe_to_gdf(df)
+
+        kml_path = Path(tmpdir) / "turbines.kml"
+        yaml_path = Path(tmpdir) / "turbines.yaml"
+        dataframe_to_kml(df, kml_path)
+        dataframe_to_yaml(df, yaml_path)
+
+        map_path = Path(tmpdir) / "map.html"
+        export_folium_map({"Turbines": gdf}, map_path)
+
+        return {
+            "kml": kml_path.read_bytes().hex(),
+            "yaml": yaml_path.read_text(),
+            "map": map_path.read_text(),
         }
 
