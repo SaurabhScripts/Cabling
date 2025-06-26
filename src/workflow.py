@@ -11,6 +11,7 @@ import requests
 import folium
 import yaml
 import string
+import simplekml
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
@@ -211,6 +212,34 @@ def gpkg_to_obstacles_yaml(gpkg_path: Path, yaml_path: Path) -> None:
         f.write("OBSTACLES:\n")
         for item in items:
             f.write(f"- '{item}'\n")
+
+
+def gpkg_to_kmz(gpkg_path: Path, kmz_path: Path) -> None:
+    """Convert an obstacle GeoPackage to a KMZ file with simple styling."""
+    gdf = gpd.read_file(gpkg_path)
+
+    kml = simplekml.Kml()
+
+    for _, row in gdf.iterrows():
+        geom = row.geometry
+        if geom is None or geom.is_empty:
+            continue
+        if geom.geom_type == "Point":
+            kml.newpoint(coords=[(geom.x, geom.y)])
+        elif geom.geom_type in {"LineString", "LinearRing"}:
+            ls = kml.newlinestring(coords=list(geom.coords))
+            ls.style.linestyle.color = simplekml.Color.orange
+            ls.style.linestyle.width = 2
+        elif geom.geom_type == "Polygon":
+            poly = kml.newpolygon(outerboundaryis=list(geom.exterior.coords))
+            poly.style.linestyle.color = simplekml.Color.orange
+            poly.style.linestyle.width = 2
+            poly.style.polystyle.color = simplekml.Color.changealphaint(80, simplekml.Color.orange)
+
+    if str(kmz_path).lower().endswith(".kmz"):
+        kml.savekmz(str(kmz_path))
+    else:
+        kml.save(str(kmz_path))
 
 
 
