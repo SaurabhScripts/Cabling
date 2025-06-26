@@ -64,6 +64,13 @@ from cabling import gpkg_to_kmz
 gpkg_to_kmz("obstacles.gpkg", "obstacles.kmz")
 ```
 
+You can also convert directly from the command line using
+`convert_gpkg_to_kmz.py`:
+
+```bash
+./convert_gpkg_to_kmz.py obstacles.gpkg obstacles.kmz
+```
+
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.

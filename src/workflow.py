@@ -4,6 +4,7 @@ from zipfile import ZipFile
 import re
 
 import geopandas as gpd
+import fiona
 import pandas as pd
 from shapely.geometry import box, LineString, Point
 from shapely.ops import unary_union
@@ -215,26 +216,53 @@ def gpkg_to_obstacles_yaml(gpkg_path: Path, yaml_path: Path) -> None:
 
 
 def gpkg_to_kmz(gpkg_path: Path, kmz_path: Path) -> None:
-    """Convert an obstacle GeoPackage to a KMZ file with simple styling."""
-    gdf = gpd.read_file(gpkg_path)
+    """Convert a GeoPackage with one or more layers to a KMZ archive."""
+
+    if not gpkg_path.is_file():
+        raise FileNotFoundError(f"Input GPKG file not found: {gpkg_path}")
+
+    layers = fiona.listlayers(gpkg_path)
+    if not layers:
+        raise ValueError(f"No layers found in GeoPackage: {gpkg_path}")
 
     kml = simplekml.Kml()
 
-    for _, row in gdf.iterrows():
-        geom = row.geometry
-        if geom is None or geom.is_empty:
-            continue
-        if geom.geom_type == "Point":
-            kml.newpoint(coords=[(geom.x, geom.y)])
-        elif geom.geom_type in {"LineString", "LinearRing"}:
-            ls = kml.newlinestring(coords=list(geom.coords))
-            ls.style.linestyle.color = simplekml.Color.orange
-            ls.style.linestyle.width = 2
-        elif geom.geom_type == "Polygon":
-            poly = kml.newpolygon(outerboundaryis=list(geom.exterior.coords))
-            poly.style.linestyle.color = simplekml.Color.orange
-            poly.style.linestyle.width = 2
-            poly.style.polystyle.color = simplekml.Color.changealphaint(80, simplekml.Color.orange)
+    for layer in layers:
+        gdf = gpd.read_file(gpkg_path, layer=layer)
+
+        if gdf.crs and gdf.crs.to_epsg() != 4326:
+            gdf = gdf.to_crs(epsg=4326)
+
+        for idx, row in gdf.iterrows():
+            geom = row.geometry
+            if geom is None or geom.is_empty:
+                continue
+            name = row.get("name") or f"{layer}_{idx}"
+
+            if geom.geom_type == "Point":
+                placemark = kml.newpoint(name=name, coords=[(geom.x, geom.y)])
+            elif geom.geom_type in ("LineString", "MultiLineString"):
+                coords = (
+                    list(geom.coords)
+                    if geom.geom_type == "LineString"
+                    else [pt for part in geom for pt in part.coords]
+                )
+                placemark = kml.newlinestring(name=name, coords=coords)
+            elif geom.geom_type in ("Polygon", "MultiPolygon"):
+                polygons = [geom] if geom.geom_type == "Polygon" else geom
+                for poly in polygons:
+                    exterior = list(poly.exterior.coords)
+                    placemark = kml.newpolygon(name=name, outerboundaryis=exterior)
+            else:
+                continue
+
+            props = {
+                k: v for k, v in row.items() if k not in {"geometry", "name"}
+            }
+            if props:
+                placemark.description = "\n".join(
+                    f"{k}: {v}" for k, v in props.items()
+                )
 
     if str(kmz_path).lower().endswith(".kmz"):
         kml.savekmz(str(kmz_path))
