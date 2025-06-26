@@ -16,6 +16,7 @@ from .workflow import (
     generate_optimized_route,
     gpkg_to_obstacles_yaml,
     gpkg_to_kmz,
+    build_site_yaml,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "generate_optimized_route",
     "gpkg_to_obstacles_yaml",
     "gpkg_to_kmz",
+    "build_site_yaml",
 ]
