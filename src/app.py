@@ -8,6 +8,8 @@ from .turbine_excel import (
     dataframe_to_gdf,
 )
 from fastapi.staticfiles import StaticFiles
+import shutil
+import uuid
 import geopandas as gpd
 from shapely.geometry import box
 from pathlib import Path
@@ -30,6 +32,11 @@ app = FastAPI()
 
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# directory for storing generated KMZ results
+results_dir = Path("results")
+results_dir.mkdir(exist_ok=True)
+app.mount("/results", StaticFiles(directory=str(results_dir)), name="results")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -154,10 +161,14 @@ async def run_final_route(site: UploadFile = File(...)):
         with open(site_path, "wb") as f:
             f.write(await site.read())
 
-        kmz_path = Path(tmpdir) / "route.kmz"
-        generate_optimized_route(site_path, kmz_path)
+        kmz_tmp = Path(tmpdir) / "route.kmz"
+        generate_optimized_route(site_path, kmz_tmp)
 
-        return {"route_kmz": kmz_path.read_bytes().hex()}
+        out_name = f"route_{uuid.uuid4().hex}.kmz"
+        out_path = results_dir / out_name
+        shutil.move(kmz_tmp, out_path)
+
+    return {"url": f"/results/{out_name}"}
 
 
 @app.post("/turbine-kml/")
