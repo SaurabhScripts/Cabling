@@ -159,8 +159,14 @@ def csv_to_yaml(csv_path: Path, yaml_path: Path) -> None:
 
 
 def load_csv_points(path: Path) -> gpd.GeoDataFrame:
-    """Load a CSV with latitude/longitude columns into a GeoDataFrame."""
-    df = pd.read_csv(path)
+    """Load a CSV with latitude/longitude columns into a GeoDataFrame.
+
+    The function tries UTF-8 encoding first and falls back to latin-1 if
+    decoding fails."""
+    try:
+        df = pd.read_csv(path)
+    except UnicodeDecodeError:
+        df = pd.read_csv(path, encoding="latin-1")
     lat_col = next(
         (c for c in df.columns if c.lower() in {"lat", "latitude", "y"}), None
     )
