@@ -13,8 +13,10 @@
 </head>
 <body>
   <div id="controls">
-    <label for="fileInput">Upload Excel (.xlsx): </label>
-    <input type="file" id="fileInput" accept=".xlsx" />
+    <label for="turbineInput">Turbines (.xlsx/.csv/.yaml): </label>
+    <input type="file" id="turbineInput" accept=".xlsx,.csv,.yaml,.yml" />
+    <label for="substationInput" style="margin-left:20px;">Substation (KMZ): </label>
+    <input type="file" id="substationInput" accept=".kmz" />
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
@@ -43,10 +45,13 @@
         'Satellite': satellite
       };
       L.control.layers(baseMaps).addTo(map);
-      let dataLayer;
-      const fileInput = document.getElementById('fileInput');
-      fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
+      let turbineLayer;
+      let extentLayer;
+      let substationLayer;
+      const turbineInput = document.getElementById('turbineInput');
+      const substationInput = document.getElementById('substationInput');
+
+      function uploadFile(file, isTurbine) {
         if (!file) return;
         const formData = new FormData();
         formData.append('file', file);
@@ -54,30 +59,34 @@
           method: 'POST',
           body: formData
         })
-        .then(res => res.json())
-        .then(data => {
-          if (dataLayer) {
-            map.removeLayer(dataLayer);
-          }
-          if (data.geojson) {
-            dataLayer = L.geoJSON(data.geojson).addTo(map);
-            map.fitBounds(dataLayer.getBounds());
-          } else if (data.kmlUrl) {
-            dataLayer = omnivore.kml(data.kmlUrl)
-              .on('ready', function() {
-                map.fitBounds(dataLayer.getBounds());
-              })
-              .addTo(map);
-          } else {
-            console.error('Unexpected data format:', data);
-            alert('Received unsupported data format.');
-          }
-        })
-        .catch(err => {
-          console.error(err);
-          alert('Error processing file.');
-        });
-      });
+          .then(res => res.json())
+          .then(data => {
+            if (isTurbine) {
+              if (turbineLayer) map.removeLayer(turbineLayer);
+              turbineLayer = L.geoJSON(data.geojson).addTo(map);
+              map.fitBounds(turbineLayer.getBounds());
+              if (extentLayer) map.removeLayer(extentLayer);
+              if (data.extent) {
+                extentLayer = L.geoJSON(data.extent, { style: { color: 'red' } }).addTo(map);
+              }
+            } else {
+              if (substationLayer) map.removeLayer(substationLayer);
+              substationLayer = L.geoJSON(data.geojson).addTo(map);
+              if (turbineLayer) {
+                map.fitBounds(turbineLayer.getBounds());
+              } else {
+                map.fitBounds(substationLayer.getBounds());
+              }
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            alert('Error processing file.');
+          });
+      }
+
+      turbineInput.addEventListener('change', e => uploadFile(e.target.files[0], true));
+      substationInput.addEventListener('change', e => uploadFile(e.target.files[0], false));
     });
   </script>
 </body>

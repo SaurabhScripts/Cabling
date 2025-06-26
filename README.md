@@ -41,4 +41,4 @@ The interface sends the selected files to the `/process/` endpoint and displays 
 
 ### Quick map viewer
 
-Navigate to `/map` to access a simple viewer for plotting turbine Excel files on a Leaflet map. Upload a `.xlsx` file and it will be converted to GeoJSON through the `/upload` endpoint and drawn directly in the browser.
+Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.
