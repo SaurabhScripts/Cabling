@@ -425,3 +425,120 @@ def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
     export_H_to_kml(
         H, filepath=output_kmz, project_to_wgs84=("EPSG:32643", "EPSG:4326")
     )
+
+
+def build_site_yaml(
+    turbine_file: Path,
+    substation_file: Path,
+    obstacles_gpkg: Path,
+    output_yaml: Path,
+) -> None:
+    """Create a combined site YAML from turbine, substation and obstacle data.
+
+    Parameters
+    ----------
+    turbine_file:
+        Excel or CSV file containing turbine coordinates in UTM as produced by
+        the ``read_turbine_excel`` helper.
+    substation_file:
+        ``.kml`` or ``.kmz`` file with substation placemarks.
+    obstacles_gpkg:
+        GeoPackage with obstacle polygons/lines.
+    output_yaml:
+        Destination for the resulting YAML file.
+    """
+
+    from .turbine_excel import read_turbine_excel
+    import xml.etree.ElementTree as ET
+    import zipfile
+    import tempfile
+
+    df = read_turbine_excel(turbine_file)
+
+    def index_to_code(idx: int) -> str:
+        letters = []
+        for _ in range(2):
+            letters.append(chr(ord("A") + (idx % 26)))
+            idx //= 26
+        return "".join(reversed(letters))
+
+    def dec_to_dms(val: float, is_lat: bool) -> str:
+        deg = int(abs(val))
+        minutes = (abs(val) - deg) * 60
+        hemi = "N" if is_lat else "E"
+        if val < 0:
+            hemi = "S" if is_lat else "W"
+        return f"{deg}\u00B0{minutes:.3f}'{hemi}"
+
+    # --- Turbine lines ---
+    turbine_lines = [
+        f"  {index_to_code(i)} {dec_to_dms(r.Latitude, True)} {dec_to_dms(r.Longitude, False)}"
+        for i, r in df.iterrows()
+    ]
+
+    # --- Extent lines (A-D clockwise) ---
+    min_lat, max_lat = df["Latitude"].min(), df["Latitude"].max()
+    min_lon, max_lon = df["Longitude"].min(), df["Longitude"].max()
+    extent_lines = [
+        f"  A {dec_to_dms(max_lat, True)} {dec_to_dms(min_lon, False)}",
+        f"  B {dec_to_dms(max_lat, True)} {dec_to_dms(max_lon, False)}",
+        f"  C {dec_to_dms(min_lat, True)} {dec_to_dms(max_lon, False)}",
+        f"  D {dec_to_dms(min_lat, True)} {dec_to_dms(min_lon, False)}",
+    ]
+
+    # --- Parse substations from KML/KMZ ---
+    def parse_substations(path: Path) -> list[tuple[str, float, float]]:
+        def load_root(p: Path) -> ET.Element:
+            if p.suffix.lower() == ".kmz":
+                with zipfile.ZipFile(p, "r") as kmz:
+                    name = next(n for n in kmz.namelist() if n.lower().endswith(".kml"))
+                    with kmz.open(name) as kmlf:
+                        return ET.parse(kmlf).getroot()
+            return ET.parse(p).getroot()
+
+        ns = {"kml": "http://www.opengis.net/kml/2.2"}
+        root = load_root(path)
+        result = []
+        for pm in root.findall(".//kml:Placemark", ns):
+            name = pm.findtext("kml:name", default="", namespaces=ns)
+            coord = pm.findtext(".//kml:coordinates", default="", namespaces=ns)
+            if coord:
+                lon, lat = map(float, coord.split(",")[:2])
+                result.append((name, lat, lon))
+        return result
+
+    subs = parse_substations(substation_file)
+    sub_lines = [
+        f"  [{name}] {dec_to_dms(lat, True)} {dec_to_dms(lon, False)}"
+        for name, lat, lon in subs
+    ]
+
+    # --- Obstacles ---
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_yaml = Path(tmpdir) / "obstacles.yaml"
+        gpkg_to_obstacles_yaml(obstacles_gpkg, tmp_yaml)
+        obs_data = yaml.safe_load(tmp_yaml.read_text(encoding="utf-8"))
+        obstacles_list = obs_data.get("OBSTACLES", [])
+
+    # --- Write final YAML ---
+    with open(output_yaml, "w", encoding="utf-8") as f:
+        f.write("OPERATOR: Serentica\n")
+        f.write("TURBINE:\n  make: Vestas\n  model: V90/3000\n  power_MW: 3\n\n")
+        f.write("LANDSCAPE_ANGLE: 0\n\n")
+
+        f.write("EXTENTS: |-\n")
+        for ln in extent_lines:
+            f.write(f"{ln}\n")
+
+        f.write("\nSUBSTATIONS: |-\n")
+        for ln in sub_lines:
+            f.write(f"{ln}\n")
+
+        f.write("\nTURBINES: |-\n")
+        for ln in turbine_lines:
+            f.write(f"{ln}\n")
+
+        f.write("\nOBSTACLES:\n")
+        for item in obstacles_list:
+            f.write(f"- '{item}'\n")
+
