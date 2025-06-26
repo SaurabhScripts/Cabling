@@ -445,6 +445,7 @@ def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
     from interarray.EW_presolver import EW_presolver
     import interarray.MILP.pyomo as omo
     from interarray.interface import assign_cables
+    cbcer = pyo.SolverFactory('cbc')
 
     cable_costs = [75, 80, 90, 100]
     turbines_per_cable = [5, 11, 20, 43]
@@ -459,14 +460,41 @@ def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
     L = L_from_yaml(site_yaml, handle="Site")
     P, A = make_planar_embedding(L)
 
+    # P, A = make_planar_embedding(L)
+    # %config InlineBackend.figure_formats = ['svg']
+    # svgplot(L, landscape=False)
+    P, A = make_planar_embedding(L)
     S_pre = EW_presolver(A, capacity)
+    G_pre = G_from_S(S_pre, A)
+    G_pre.size('weight = length')
+    #gplot(G_pre, landscape=False)
+    H_pre = PathFinder(G_pre, planar=P, A=A).create_detours()
+    # gplot(H_pre, landscape=False);
     model = omo.make_min_length_model(
-        A, capacity, gateXings_constraint=False, gates_limit=False, branching=True
+        A, capacity,
+        gateXings_constraint=False,
+        gates_limit=False,
+        branching=True
     )
-    omo.warmup_model(model, S_pre)
-
-    result = solver.solve(model, warmstart=model.warmed_by, tee=True)
-    S = omo.S_from_solution(model, solver, result)
+    omo.warmup_model(model, S_pre);
+    cbcer.options.update(dict(
+        ratioGap=0.005,
+        seconds=60,
+        timeMode='elapsed',
+        threads=8,
+        # if repeatable results are desired, set the seed
+        RandomCbcSeed=4321,
+        # the parameters below and more can be experimented with
+        # http://www.decom.ufop.br/haroldo/files/cbcCommandLine.pdf
+        Dins='on',
+        VndVariableNeighborhoodSearch='on',
+        #strategy=2,
+        #PassFeasibilityPump=100,  # not used if warm-started
+        #ProximitySearch='on',
+    ))
+    print(f'Solving "{model.handle}": {{R={len(model.R)}, T={len(model.T)}, k={model.k.value}}}\n')
+    result = cbcer.solve(model, warmstart=model.warmed_by, tee=True)
+    S = omo.S_from_solution(model, cbcer, result)
     G = G_from_S(S, A)
     H = PathFinder(G, planar=P, A=A).create_detours()
     assign_cables(H, cables)
