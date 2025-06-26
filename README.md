@@ -54,6 +54,16 @@ gpkg_to_obstacles_yaml("obstacles.gpkg", "obstacles.yaml")
 The resulting `obstacles.yaml` can then be merged with the turbine and
 substation data when building the site configuration.
 
+If you need a quick KMZ representation of the obstacles for visual inspection,
+use `gpkg_to_kmz` which applies simple styling so polygons are visible in most
+KML viewers:
+
+```python
+from cabling import gpkg_to_kmz
+
+gpkg_to_kmz("obstacles.gpkg", "obstacles.kmz")
+```
+
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.

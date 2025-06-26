@@ -32,10 +32,12 @@
     <input type="file" id="substationInput" accept=".kmz" />
     <label for="obstacleInput" style="margin-left:20px;">Obstacles: </label>
     <input type="file" id="obstacleInput" />
+    <button id="routeBtn" style="margin-left:20px;">Create Route</button>
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.4/leaflet-omnivore.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       if (typeof L === 'undefined') {
@@ -59,17 +61,26 @@
         'Topographic': topo,
         'Satellite': satellite
       };
-      L.control.layers(baseMaps).addTo(map);
+      let overlays = {};
+      let layerControl = L.control.layers(baseMaps, overlays).addTo(map);
+
+      function updateLayers() {
+        layerControl.remove();
+        layerControl = L.control.layers(baseMaps, overlays).addTo(map);
+      }
+
       let turbineLayer;
       let extentLayer;
       let substationLayer;
       let obstacleLayer;
+      let routeLayer;
       const turbineInput = document.getElementById('turbineInput');
       const substationInput = document.getElementById('substationInput');
       const obstacleInput = document.getElementById('obstacleInput');
+      const routeBtn = document.getElementById('routeBtn');
 
       const substationIcon = L.icon({
-        iconUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/images/marker-icon-red.png',
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2661/2661370.png',
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
@@ -90,27 +101,34 @@
             if (type === 'turbine') {
               if (turbineLayer) map.removeLayer(turbineLayer);
               turbineLayer = L.geoJSON(data.geojson).addTo(map);
+              overlays['Turbines'] = turbineLayer;
               map.fitBounds(turbineLayer.getBounds());
               if (extentLayer) map.removeLayer(extentLayer);
               if (data.extent) {
                 extentLayer = L.geoJSON(data.extent, { style: { color: 'red' } }).addTo(map);
+                overlays['Extent'] = extentLayer;
               }
+              updateLayers();
             } else if (type === 'substation') {
               if (substationLayer) map.removeLayer(substationLayer);
               substationLayer = L.geoJSON(data.geojson, {
                 pointToLayer: (f, ll) => L.marker(ll, { icon: substationIcon })
               }).addTo(map);
+              overlays['Substations'] = substationLayer;
               if (turbineLayer) {
                 map.fitBounds(turbineLayer.getBounds());
               } else {
                 map.fitBounds(substationLayer.getBounds());
               }
+              updateLayers();
             } else if (type === 'obstacle') {
               if (obstacleLayer) map.removeLayer(obstacleLayer);
               obstacleLayer = L.geoJSON(data.geojson, {
                 style: { color: 'orange' },
                 pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: 'orange' })
               }).addTo(map);
+              overlays['Obstacles'] = obstacleLayer;
+              updateLayers();
             }
           })
           .catch(err => {
@@ -123,14 +141,35 @@
       substationInput.addEventListener('change', e => uploadFile(e.target.files[0], 'substation'));
       obstacleInput.addEventListener('change', e => uploadFile(e.target.files[0], 'obstacle'));
 
+      async function kmzToKml(hexStr) {
+        const bytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(h => parseInt(h, 16)));
+        const zip = await JSZip.loadAsync(bytes);
+        const kmlName = Object.keys(zip.files).find(n => n.toLowerCase().endsWith('.kml'));
+        return zip.file(kmlName).async('string');
+      }
+
+      routeBtn.addEventListener('click', async () => {
+        const formData = new FormData();
+        if (turbineInput.files[0]) formData.append('turbines', turbineInput.files[0]);
+        if (substationInput.files[0]) formData.append('substation', substationInput.files[0]);
+        if (obstacleInput.files[0]) formData.append('obstacles', obstacleInput.files[0]);
+        const res = await fetch('/process/', { method: 'POST', body: formData });
+        const data = await res.json();
+        const kml = await kmzToKml(data.route_kmz);
+        if (routeLayer) map.removeLayer(routeLayer);
+        routeLayer = omnivore.kml.parse(kml).addTo(map);
+        overlays['Route'] = routeLayer;
+        updateLayers();
+      });
+
       const legend = L.control({ position: 'bottomright' });
       legend.onAdd = function() {
         const div = L.DomUtil.create('div', 'legend');
         div.innerHTML =
           '<i style="background: blue"></i> Turbines<br>' +
-          '<img src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/images/marker-icon-red.png" ' +
-          'width="12" style="margin-right:6px;">Substation<br>' +
-          '<i style="background: orange"></i> Obstacles';
+          '<img src="https://cdn-icons-png.flaticon.com/512/2661/2661370.png" width="12" style="margin-right:6px;">Substation<br>' +
+          '<i style="background: orange"></i> Obstacles<br>' +
+          '<i style="background: green"></i> Route';
         return div;
       };
       legend.addTo(map);
