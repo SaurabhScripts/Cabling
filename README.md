@@ -90,6 +90,19 @@ There is also a small command line wrapper ``turbines_to_extents.py``:
 ./turbines_to_extents.py turbines.yaml --out-dir temp
 ```
 
+### Create a full site YAML
+
+When you have turbine spreadsheets, a substation KML/KMZ and obstacle
+data, the ``full_yaml.py`` helper can assemble them into a single site
+definition:
+
+```bash
+./full_yaml.py turbines.xlsx substation.kmz obstacles.gpkg site.yaml
+```
+
+The script uses the same logic as the API to convert coordinates and
+produces ``site.yaml`` ready for optimisation.
+
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.
