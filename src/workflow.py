@@ -26,7 +26,9 @@ def _overpass_query(bbox: str, key: str, values: List[str]) -> str:
     return query
 
 
-def download_osm_layer(bbox: tuple[float, float, float, float], key: str, values: List[str]) -> gpd.GeoDataFrame:
+def download_osm_layer(
+    bbox: tuple[float, float, float, float], key: str, values: List[str]
+) -> gpd.GeoDataFrame:
     minx, miny, maxx, maxy = bbox
     bbox_str = f"{miny},{minx},{maxy},{maxx}"
     query = _overpass_query(bbox_str, key, values)
@@ -53,7 +55,9 @@ def download_osm_layer(bbox: tuple[float, float, float, float], key: str, values
     return gdf
 
 
-def create_extent(points: gpd.GeoDataFrame, buffer: float = 0.01) -> tuple[float, float, float, float]:
+def create_extent(
+    points: gpd.GeoDataFrame, buffer: float = 0.01
+) -> tuple[float, float, float, float]:
     bounds = points.total_bounds
     minx, miny, maxx, maxy = bounds
     minx -= buffer
@@ -79,11 +83,12 @@ def buffer_and_union(gdf: gpd.GeoDataFrame, distance: float) -> gpd.GeoSeries:
 
 def export_kmz(gdf: gpd.GeoDataFrame, path: Path) -> None:
     """Write *gdf* to a KMZ archive at *path*."""
-    kml_path = path.with_suffix('.kml')
-    gdf.to_file(kml_path, driver='KML')
-    with ZipFile(path, 'w') as zf:
+    kml_path = path.with_suffix(".kml")
+    gdf.to_file(kml_path, driver="KML")
+    with ZipFile(path, "w") as zf:
         zf.write(kml_path, arcname=kml_path.name)
     kml_path.unlink()
+
 
 def export_folium_map(layers: Dict[str, gpd.GeoDataFrame], path: Path) -> None:
     """Export a Folium map with multiple layers and layer control."""
@@ -107,15 +112,23 @@ def csv_to_yaml(csv_path: Path, yaml_path: Path) -> None:
 def load_csv_points(path: Path) -> gpd.GeoDataFrame:
     """Load a CSV with latitude/longitude columns into a GeoDataFrame."""
     df = pd.read_csv(path)
-    lat_col = next((c for c in df.columns if c.lower() in {"lat", "latitude", "y"}), None)
-    lon_col = next((c for c in df.columns if c.lower() in {"lon", "long", "longitude", "x"}), None)
+    lat_col = next(
+        (c for c in df.columns if c.lower() in {"lat", "latitude", "y"}), None
+    )
+    lon_col = next(
+        (c for c in df.columns if c.lower() in {"lon", "long", "longitude", "x"}), None
+    )
     if not lat_col or not lon_col:
         raise ValueError("CSV must contain latitude/longitude columns")
-    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df[lon_col], df[lat_col]), crs=4326)
+    gdf = gpd.GeoDataFrame(
+        df, geometry=gpd.points_from_xy(df[lon_col], df[lat_col]), crs=4326
+    )
     return gdf
 
 
-def generate_simple_route(turbines: gpd.GeoDataFrame, substation: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def generate_simple_route(
+    turbines: gpd.GeoDataFrame, substation: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
     """Create simple lines from the substation to each turbine."""
     if turbines.empty or substation.empty:
         return gpd.GeoDataFrame(geometry=[], crs=4326)
@@ -200,8 +213,8 @@ def gpkg_to_obstacles_yaml(gpkg_path: Path, yaml_path: Path) -> None:
             lat_dir = "N" if lat >= 0 else "S"
             lon_dir = "E" if lon >= 0 else "W"
             lines.append(
-                f"{label} {lat_deg}\u00B0{lat_min:.3f}''{lat_dir} "
-                f"{lon_deg}\u00B0{lon_min:.3f}''{lon_dir}"
+                f"{label} {lat_deg}\u00b0{lat_min:.3f}''{lat_dir} "
+                f"{lon_deg}\u00b0{lon_min:.3f}''{lon_dir}"
             )
 
         if not lines:
@@ -256,13 +269,9 @@ def gpkg_to_kmz(gpkg_path: Path, kmz_path: Path) -> None:
             else:
                 continue
 
-            props = {
-                k: v for k, v in row.items() if k not in {"geometry", "name"}
-            }
+            props = {k: v for k, v in row.items() if k not in {"geometry", "name"}}
             if props:
-                placemark.description = "\n".join(
-                    f"{k}: {v}" for k, v in props.items()
-                )
+                placemark.description = "\n".join(f"{k}: {v}" for k, v in props.items())
 
     if str(kmz_path).lower().endswith(".kmz"):
         kml.savekmz(str(kmz_path))
@@ -270,6 +279,149 @@ def gpkg_to_kmz(gpkg_path: Path, kmz_path: Path) -> None:
         kml.save(str(kmz_path))
 
 
+def export_H_to_kml(
+    H,
+    filepath: str | Path = "routes.kml",
+    include_nodes: bool = False,
+    project_to_wgs84: tuple[str, str] | None = None,
+) -> None:
+    """Export a routed graph *H* to KML.
+
+    The function is a lightweight wrapper around :mod:`simplekml` that draws
+    each edge of ``H`` and colours it by the ``cable`` attribute.  Optionally the
+    coordinates can be reprojected on the fly using ``pyproj`` if ``H`` is in a
+    projected CRS (e.g. UTM).
+
+    Parameters
+    ----------
+    H:
+        A networkx graph produced by ``interarray`` containing routing
+        information.
+    filepath:
+        Destination ``.kml`` or ``.kmz`` file.
+    include_nodes:
+        If ``True`` all graph nodes are exported as placemarks.
+    project_to_wgs84:
+        Optional ``(src_crs, dst_crs)`` tuple for reprojection using
+        ``pyproj.Transformer``.  When ``None`` the coordinates are written as-is.
+    """
+
+    import simplekml
+    from pathlib import Path
+
+    pos: dict[int, tuple[float, float]] = {}
+    R = H.graph.get("R", 0)
+    VertexC = H.graph.get("VertexC")
+    fnT = H.graph.get("fnT")
+    if VertexC is None:
+        raise ValueError("Graph does not contain coordinate matrix 'VertexC'.")
+
+    n_base = VertexC.shape[0] - R
+    for i in range(n_base):
+        pos[i] = tuple(VertexC[i])
+    for idx, coord in enumerate(VertexC[-R:], start=-R):
+        pos[idx] = tuple(coord)
+    if fnT is not None:
+        T = H.graph.get("T", 0)
+        B = H.graph.get("B", 0)
+        C = H.graph.get("C", 0)
+        D = H.graph.get("D", 0)
+        for n in range(T + B, T + B + C + D):
+            pos[n] = tuple(VertexC[fnT[n]])
+
+    if project_to_wgs84:
+        from pyproj import Transformer
+
+        transformer = Transformer.from_crs(*project_to_wgs84, always_xy=True)
+        for n, (x, y) in pos.items():
+            lon, lat = transformer.transform(x, y)
+            pos[n] = (lon, lat)
+
+    color_map = {
+        0: simplekml.Color.blue,
+        1: simplekml.Color.green,
+        2: simplekml.Color.orange,
+        3: simplekml.Color.red,
+    }
+
+    kml = simplekml.Kml()
+    skipped: list[tuple[int, int]] = []
+
+    for u, v, data in H.edges(data=True):
+        if u not in pos or v not in pos:
+            skipped.append((u, v))
+            continue
+
+        lon1, lat1 = pos[u]
+        lon2, lat2 = pos[v]
+        idx = data.get("cable", 0)
+        line = kml.newlinestring(
+            name=f"cable_{idx}", coords=[(lon1, lat1), (lon2, lat2)]
+        )
+        line.style.linestyle.color = color_map.get(idx, simplekml.Color.gray)
+        line.style.linestyle.width = 3
+
+    if include_nodes:
+        for n, attrs in H.nodes(data=True):
+            if n not in pos:
+                continue
+            lon, lat = pos[n]
+            p = kml.newpoint(name=str(n), coords=[(lon, lat)])
+            if n < 0:
+                p.style.iconstyle.color = simplekml.Color.red
+            else:
+                p.style.iconstyle.scale = 0.5
+
+    dst = Path(filepath)
+    if dst.suffix.lower() == ".kmz":
+        kml.savekmz(str(dst))
+    else:
+        kml.save(str(dst))
 
 
+def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
+    """Run the interarray optimisation workflow and export the route to KMZ.
 
+    This is a convenience wrapper around a subset of the example code provided
+    by the ``interarray`` package.  It requires several optional dependencies
+    (``interarray`` and ``pyomo``).  If they are missing the function will raise
+    an ``ImportError``.
+    """
+
+    import pyomo.environ as pyo
+    from interarray.importer import L_from_yaml
+    from interarray.mesh import make_planar_embedding
+    from interarray.interarraylib import G_from_S
+    from interarray.pathfinding import PathFinder
+    from interarray.EW_presolver import EW_presolver
+    import interarray.MILP.pyomo as omo
+    from interarray.interface import assign_cables
+
+    cable_costs = [75, 80, 90, 100]
+    turbines_per_cable = [5, 11, 20, 43]
+    cables = [
+        (None, capacity, cost)
+        for capacity, cost in zip(turbines_per_cable, cable_costs)
+    ]
+    capacity = max(turbines_per_cable)
+
+    solver = pyo.SolverFactory("cbc")
+
+    L = L_from_yaml(site_yaml, handle="Site")
+    P, A = make_planar_embedding(L)
+
+    S_pre = EW_presolver(A, capacity)
+    model = omo.make_min_length_model(
+        A, capacity, gateXings_constraint=False, gates_limit=False, branching=True
+    )
+    omo.warmup_model(model, S_pre)
+
+    result = solver.solve(model, warmstart=model.warmed_by, tee=True)
+    S = omo.S_from_solution(model, solver, result)
+    G = G_from_S(S, A)
+    H = PathFinder(G, planar=P, A=A).create_detours()
+    assign_cables(H, cables)
+
+    export_H_to_kml(
+        H, filepath=output_kmz, project_to_wgs84=("EPSG:32643", "EPSG:4326")
+    )

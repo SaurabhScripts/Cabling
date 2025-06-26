@@ -12,6 +12,8 @@ from .workflow import (
     load_csv_points,
     generate_simple_route,
     load_yaml_points,
+    export_H_to_kml,
+    generate_optimized_route,
     gpkg_to_obstacles_yaml,
     gpkg_to_kmz,
 )
@@ -28,6 +30,8 @@ __all__ = [
     "load_csv_points",
     "generate_simple_route",
     "load_yaml_points",
+    "export_H_to_kml",
+    "generate_optimized_route",
     "gpkg_to_obstacles_yaml",
     "gpkg_to_kmz",
 ]

@@ -32,6 +32,8 @@
     <input type="file" id="substationInput" accept=".kmz" />
     <label for="obstacleInput" style="margin-left:20px;">Obstacles: </label>
     <input type="file" id="obstacleInput" />
+    <label for="siteInput" style="margin-left:20px;">Site YAML: </label>
+    <input type="file" id="siteInput" accept=".yml,.yaml" />
     <button id="routeBtn" style="margin-left:20px;">Create Route</button>
   </div>
   <div id="map"></div>
@@ -77,6 +79,7 @@
       const turbineInput = document.getElementById('turbineInput');
       const substationInput = document.getElementById('substationInput');
       const obstacleInput = document.getElementById('obstacleInput');
+      const siteInput = document.getElementById('siteInput');
       const routeBtn = document.getElementById('routeBtn');
 
       const substationIcon = L.icon({
@@ -153,7 +156,12 @@
         if (turbineInput.files[0]) formData.append('turbines', turbineInput.files[0]);
         if (substationInput.files[0]) formData.append('substation', substationInput.files[0]);
         if (obstacleInput.files[0]) formData.append('obstacles', obstacleInput.files[0]);
-        const res = await fetch('/process/', { method: 'POST', body: formData });
+        let endpoint = '/process/';
+        if (siteInput.files[0]) {
+          formData.append('site', siteInput.files[0]);
+          endpoint = '/run-final/';
+        }
+        const res = await fetch(endpoint, { method: 'POST', body: formData });
         const data = await res.json();
         const kml = await kmzToKml(data.route_kmz);
         if (routeLayer) map.removeLayer(routeLayer);
