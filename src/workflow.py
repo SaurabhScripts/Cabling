@@ -154,11 +154,19 @@ def export_folium_map(layers: Dict[str, gpd.GeoDataFrame], path: Path) -> None:
 
 
 def csv_to_yaml(csv_path: Path, yaml_path: Path) -> None:
-    """Convert a CSV file to a YAML representation."""
-    df = pd.read_csv(csv_path)
+    """Convert a CSV or Excel file to a YAML representation."""
+
+    if csv_path.suffix.lower() in {".xlsx", ".xls"}:
+        df = pd.read_excel(csv_path)
+    else:
+        try:
+            df = pd.read_csv(csv_path)
+        except UnicodeDecodeError:
+            df = pd.read_csv(csv_path, encoding="latin-1")
+
     records = df.to_dict(orient="records")
-    with open(yaml_path, "w") as f:
-        yaml.safe_dump(records, f)
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(records, f, allow_unicode=True)
 
 
 def load_csv_points(path: Path) -> gpd.GeoDataFrame:
