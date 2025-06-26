@@ -7,3 +7,5 @@ python-multipart
 PyYAML
 utm
 simplekml
+pyproj
+pyomo

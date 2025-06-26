@@ -22,6 +22,7 @@ from .workflow import (
     load_csv_points,
     generate_simple_route,
     load_yaml_points,
+    generate_optimized_route,
 )
 from .crossings import load_osm_roads, load_osm_powerlines, count_crossings
 
@@ -103,8 +104,16 @@ async def process_files(
             extent_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
         # obstacles processing similar to original example
-        roads = load_osm_roads(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
-        power = load_osm_powerlines(extent) if not extent_source.empty else gpd.GeoDataFrame(geometry=[], crs=4326)
+        roads = (
+            load_osm_roads(extent)
+            if not extent_source.empty
+            else gpd.GeoDataFrame(geometry=[], crs=4326)
+        )
+        power = (
+            load_osm_powerlines(extent)
+            if not extent_source.empty
+            else gpd.GeoDataFrame(geometry=[], crs=4326)
+        )
 
         # simple route generation
         route_gdf = generate_simple_route(turbines_gdf, substation_gdf)
@@ -123,7 +132,9 @@ async def process_files(
         map_path = Path(tmpdir) / "map.html"
         export_folium_map(map_layers, map_path)
 
-        road_cross, power_cross = count_crossings(route_gdf, roads, power) if not route_gdf.empty else (0, 0)
+        road_cross, power_cross = (
+            count_crossings(route_gdf, roads, power) if not route_gdf.empty else (0, 0)
+        )
 
         return {
             "turbine_yaml": turbine_yaml_text,
@@ -133,6 +144,20 @@ async def process_files(
             "road_crossings": road_cross,
             "power_crossings": power_cross,
         }
+
+
+@app.post("/run-final/")
+async def run_final_route(site: UploadFile = File(...)):
+    """Run the advanced interarray optimisation using an uploaded site YAML."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        site_path = Path(tmpdir) / site.filename
+        with open(site_path, "wb") as f:
+            f.write(await site.read())
+
+        kmz_path = Path(tmpdir) / "route.kmz"
+        generate_optimized_route(site_path, kmz_path)
+
+        return {"route_kmz": kmz_path.read_bytes().hex()}
 
 
 @app.post("/turbine-kml/")
@@ -155,10 +180,10 @@ async def turbine_kml(file: UploadFile = File(...)):
         export_folium_map({"Turbines": gdf}, map_path)
 
     return {
-            "kml": kml_path.read_bytes().hex(),
-            "yaml": yaml_path.read_text(),
-            "map": map_path.read_text(),
-        }
+        "kml": kml_path.read_bytes().hex(),
+        "yaml": yaml_path.read_text(),
+        "map": map_path.read_text(),
+    }
 
 
 @app.post("/upload")
@@ -195,4 +220,3 @@ async def upload_excel(file: UploadFile = File(...)):
             "geojson": gdf.__geo_interface__,
             "extent": extent_gdf.__geo_interface__,
         }
-
