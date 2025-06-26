@@ -13,6 +13,9 @@ import folium
 import yaml
 import string
 import simplekml
+from tempfile import TemporaryDirectory
+
+from .turbine_excel import read_turbine_excel, dataframe_to_gdf
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
@@ -239,6 +242,38 @@ def load_yaml_points(path: Path) -> gpd.GeoDataFrame:
         geometry=gpd.points_from_xy(lons, lats),
         crs=4326,
     )
+    return gdf
+
+
+def load_points_file(path: Path) -> gpd.GeoDataFrame:
+    """Load point data from various file formats into a GeoDataFrame.
+
+    The helper supports CSV/Excel with UTM coordinates, YAML blocks,
+    KMZ/KML files and any other format readable by :func:`geopandas.read_file`.
+    All geometries are returned in WGS84.
+    """
+    suffix = path.suffix.lower()
+
+    if suffix in {".xlsx", ".xls", ".csv"}:
+        df = read_turbine_excel(path)
+        gdf = dataframe_to_gdf(df)
+    elif suffix in {".yml", ".yaml"}:
+        gdf = load_yaml_points(path)
+    elif suffix == ".kmz":
+        with TemporaryDirectory() as tmpdir:
+            with ZipFile(path, "r") as zf:
+                kml_files = [n for n in zf.namelist() if n.lower().endswith(".kml")]
+                if not kml_files:
+                    raise ValueError("KMZ archive contains no KML file")
+                kml_path = Path(tmpdir) / kml_files[0]
+                zf.extract(kml_files[0], tmpdir)
+            gdf = gpd.read_file(kml_path)
+    else:
+        gdf = gpd.read_file(path)
+
+    if gdf.crs and gdf.crs.to_epsg() != 4326:
+        gdf = gdf.to_crs(epsg=4326)
+
     return gdf
 
 

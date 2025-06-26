@@ -9,7 +9,7 @@ from .turbine_excel import (
 )
 from fastapi.staticfiles import StaticFiles
 import shutil
-import uuid
+from datetime import datetime
 import geopandas as gpd
 from shapely.geometry import box
 from pathlib import Path
@@ -21,7 +21,7 @@ from .workflow import (
     export_kmz,
     export_folium_map,
     csv_to_yaml,
-    load_csv_points,
+    load_points_file,
     generate_simple_route,
     load_yaml_points,
     generate_optimized_route,
@@ -63,8 +63,6 @@ async def process_files(
     obstacles: UploadFile | None = File(None),
 ):
     """Process uploaded files and return YAML strings, KMZ route and map."""
-    from datetime import datetime
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_dir = template_dir / timestamp
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -74,7 +72,7 @@ async def process_files(
         turbine_path = session_dir / turbines.filename
         with open(turbine_path, "wb") as f:
             f.write(await turbines.read())
-        turbines_gdf = load_csv_points(turbine_path)
+        turbines_gdf = load_points_file(turbine_path)
     else:
         turbines_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
@@ -82,7 +80,7 @@ async def process_files(
         sub_path = session_dir / substation.filename
         with open(sub_path, "wb") as f:
             f.write(await substation.read())
-        substation_gdf = load_csv_points(sub_path)
+        substation_gdf = load_points_file(sub_path)
     else:
         substation_gdf = gpd.GeoDataFrame(geometry=[], crs=4326)
 
@@ -192,7 +190,8 @@ async def run_final_route(site: UploadFile = File(...)):
             zf.extract(kml_files[0], tmpdir)
         gdf = gpd.read_file(kml_path)
 
-        out_name = f"route_{uuid.uuid4().hex}.kmz"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_name = f"route_{ts}.kmz"
         out_path = results_dir / out_name
         shutil.move(kmz_tmp, out_path)
 
