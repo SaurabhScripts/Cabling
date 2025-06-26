@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wind Turbine Map</title>
+<style>
+body{font-family:Arial, sans-serif;margin:0;padding:0;}
+#upload{padding:1rem;text-align:center;}
+#map-container{height:calc(100vh - 70px);width:100%;}
+</style>
+</head>
+<body>
+<div id="upload">
+<label>Upload Turbine Excel/CSV: <input type="file" id="tfile"></label>
+<span id="status"></span>
+</div>
+<div id="map-container"></div>
+<script>
+const input = document.getElementById('tfile');
+input.addEventListener('change', async () => {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  document.getElementById('status').textContent = 'Processing...';
+  const resp = await fetch('/turbine-kml/', {method:'POST', body: fd});
+  if (!resp.ok){
+    document.getElementById('status').textContent = 'Error processing file';
+    return;
+  }
+  const data = await resp.json();
+  const kmlBlob = new Blob([Uint8Array.from(Buffer.from(data.kml, 'hex'))], {type:'application/vnd.google-earth.kml+xml'});
+  const kmlUrl = URL.createObjectURL(kmlBlob);
+  document.getElementById('status').innerHTML = '<a href="'+kmlUrl+'" download="turbines.kml">Download KML</a>';
+  document.getElementById('map-container').innerHTML = data.map;
+});
+</script>
+</body>
+</html>
