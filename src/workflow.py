@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 from zipfile import ZipFile
+import re
 
 import geopandas as gpd
 import pandas as pd
@@ -118,5 +119,56 @@ def generate_simple_route(turbines: gpd.GeoDataFrame, substation: gpd.GeoDataFra
     start = substation.geometry.iloc[0]
     lines = [LineString([start, pt]) for pt in turbines.geometry]
     return gpd.GeoDataFrame(geometry=lines, crs=4326)
+
+
+dms_pattern = re.compile(r"(\d+)°([\d\.]+)'([NS])\s+(\d+)°([\d\.]+)'([EW])")
+
+
+def _dms_to_decimal(dms: str) -> tuple[float, float]:
+    """Convert a coordinate string like '12°34.5'N 45°6.7'E' to decimals."""
+    m = dms_pattern.match(dms.strip())
+    if not m:
+        raise ValueError(f"Invalid DMS format: {dms!r}")
+    dlat, mlat, ns, dlon, mlon, ew = m.groups()
+    lat = int(dlat) + float(mlat) / 60
+    lon = int(dlon) + float(mlon) / 60
+    if ns == "S":
+        lat = -lat
+    if ew == "W":
+        lon = -lon
+    return lat, lon
+
+
+def load_yaml_points(path: Path) -> gpd.GeoDataFrame:
+    """Load a turbines YAML file into a GeoDataFrame."""
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    turbines_block = data.get("TURBINES")
+
+    if isinstance(turbines_block, list):
+        lines = turbines_block
+    elif isinstance(turbines_block, str):
+        lines = [ln.strip() for ln in turbines_block.splitlines() if ln.strip()]
+    else:
+        raise RuntimeError("TURBINES field is neither list nor block string")
+
+    coords: list[tuple[float, float]] = []
+    for ln in lines:
+        parts = ln.split(maxsplit=1)
+        if len(parts) != 2:
+            continue
+        _, dms_str = parts
+        coords.append(_dms_to_decimal(dms_str))
+
+    if not coords:
+        return gpd.GeoDataFrame(geometry=[], crs=4326)
+
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
+    gdf = gpd.GeoDataFrame(
+        geometry=gpd.points_from_xy(lons, lats),
+        crs=4326,
+    )
+    return gdf
+
 
 

@@ -12,6 +12,7 @@ import geopandas as gpd
 from shapely.geometry import box
 from pathlib import Path
 import tempfile
+from zipfile import ZipFile
 
 from .workflow import (
     create_extent,
@@ -20,6 +21,7 @@ from .workflow import (
     csv_to_yaml,
     load_csv_points,
     generate_simple_route,
+    load_yaml_points,
 )
 from .crossings import load_osm_roads, load_osm_powerlines, count_crossings
 
@@ -161,7 +163,7 @@ async def turbine_kml(file: UploadFile = File(...)):
 
 @app.post("/upload")
 async def upload_excel(file: UploadFile = File(...)):
-    """Accept an Excel/KML file and return GeoJSON for map display."""
+    """Accept a geospatial file and return GeoJSON (and extent) for map display."""
     with tempfile.TemporaryDirectory() as tmpdir:
         fpath = Path(tmpdir) / file.filename
         with open(fpath, "wb") as f:
@@ -171,8 +173,23 @@ async def upload_excel(file: UploadFile = File(...)):
         if suffix in {".xlsx", ".xls", ".csv"}:
             df = read_turbine_excel(fpath)
             gdf = dataframe_to_gdf(df)
+        elif suffix in {".yml", ".yaml"}:
+            gdf = load_yaml_points(fpath)
+        elif suffix == ".kmz":
+            with ZipFile(fpath, "r") as zf:
+                kml_files = [n for n in zf.namelist() if n.lower().endswith(".kml")]
+                if not kml_files:
+                    raise ValueError("KMZ archive contains no KML file")
+                kml_path = Path(tmpdir) / kml_files[0]
+                zf.extract(kml_files[0], tmpdir)
+            gdf = gpd.read_file(kml_path)
         else:
             gdf = gpd.read_file(fpath)
 
-        return {"geojson": gdf.__geo_interface__}
+        extent_gdf = gpd.GeoDataFrame(geometry=[box(*gdf.total_bounds)], crs=4326)
+
+        return {
+            "geojson": gdf.__geo_interface__,
+            "extent": extent_gdf.__geo_interface__,
+        }
 
