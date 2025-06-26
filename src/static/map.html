@@ -1,54 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Wind Turbine Map</title>
-<style>
-body{font-family:Arial, sans-serif;margin:0;padding:0;}
-#upload{padding:1rem;text-align:center;}
-#map-container{height:calc(100vh - 70px);width:100%;}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wind Turbine Map Viewer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #controls { padding: 10px; background: #fff; }
+    #map { width: 100%; height: calc(100% - 50px); }
+  </style>
 </head>
 <body>
-<div id="upload">
-  <label>Turbines CSV/XLSX: <input type="file" id="turbines"></label>
-  <label>Substation CSV: <input type="file" id="substation"></label>
-  <label>Obstacles file: <input type="file" id="obstacles"></label>
-  <button id="process-btn">Process</button>
-  <span id="status"></span>
-</div>
-<div id="map-container"></div>
-<script>
-const turbinesInput = document.getElementById('turbines');
-const substationInput = document.getElementById('substation');
-const obstaclesInput = document.getElementById('obstacles');
-
-function hexToBytes(hex){
-  const arr = new Uint8Array(hex.length/2);
-  for(let i=0;i<arr.length;i++){
-    arr[i] = parseInt(hex.substr(i*2,2),16);
-  }
-  return arr;
-}
-
-document.getElementById('process-btn').addEventListener('click', async () => {
-  const fd = new FormData();
-  if (turbinesInput.files[0]) fd.append('turbines', turbinesInput.files[0]);
-  if (substationInput.files[0]) fd.append('substation', substationInput.files[0]);
-  if (obstaclesInput.files[0]) fd.append('obstacles', obstaclesInput.files[0]);
-  if (![...fd.keys()].length) return;
-  document.getElementById('status').textContent = 'Processing...';
-  const resp = await fetch('/process/', {method:'POST', body: fd});
-  if (!resp.ok){
-    document.getElementById('status').textContent = 'Error processing file';
-    return;
-  }
-  const data = await resp.json();
-  const kmzBlob = new Blob([hexToBytes(data.route_kmz)], {type:'application/vnd.google-earth.kmz'});
-  const kmzUrl = URL.createObjectURL(kmzBlob);
-  document.getElementById('status').innerHTML = '<a href="'+kmzUrl+'" download="route.kmz">Download KMZ</a>';
-  document.getElementById('map-container').innerHTML = data.map;
-});
-</script>
+  <div id="controls">
+    <label for="fileInput">Upload Excel (.xlsx): </label>
+    <input type="file" id="fileInput" accept=".xlsx" />
+  </div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.4/leaflet-omnivore.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof L === 'undefined') {
+        console.error('Leaflet library failed to load.');
+        alert('Error: Leaflet is not available. Please check your network or script URL.');
+        return;
+      }
+      const map = L.map('map').setView([20.5937, 78.9629], 5);
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      });
+      const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenTopoMap contributors'
+      });
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri'
+      });
+      osm.addTo(map);
+      const baseMaps = {
+        'OpenStreetMap': osm,
+        'Topographic': topo,
+        'Satellite': satellite
+      };
+      L.control.layers(baseMaps).addTo(map);
+      let dataLayer;
+      const fileInput = document.getElementById('fileInput');
+      fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        fetch('/upload', {
+          method: 'POST',
+          body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (dataLayer) {
+            map.removeLayer(dataLayer);
+          }
+          if (data.geojson) {
+            dataLayer = L.geoJSON(data.geojson).addTo(map);
+            map.fitBounds(dataLayer.getBounds());
+          } else if (data.kmlUrl) {
+            dataLayer = omnivore.kml(data.kmlUrl)
+              .on('ready', function() {
+                map.fitBounds(dataLayer.getBounds());
+              })
+              .addTo(map);
+          } else {
+            console.error('Unexpected data format:', data);
+            alert('Received unsupported data format.');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          alert('Error processing file.');
+        });
+      });
+    });
+  </script>
 </body>
 </html>
