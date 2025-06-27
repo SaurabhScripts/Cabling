@@ -92,8 +92,17 @@
       const siteInput = document.getElementById('siteInput');
       const routeBtn = document.getElementById('routeBtn');
 
+      const turbineIcon = L.icon({
+        iconUrl: 'https://i.postimg.cc/2yjnQrHg/file-00000000f62c6230bf7aac82f2d385d7.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/images/marker-shadow.png',
+        shadowSize: [41, 41]
+      });
+
       const substationIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/2661/2661370.png',
+        iconUrl: 'https://i.postimg.cc/WzxvPbJk/file-00000000fe0061f7b8f27bf449c455c1-2.png',
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34],
@@ -113,7 +122,9 @@
           .then(data => {
             if (type === 'turbine') {
               if (turbineLayer) map.removeLayer(turbineLayer);
-              turbineLayer = L.geoJSON(data.geojson).addTo(map);
+              turbineLayer = L.geoJSON(data.geojson, {
+                pointToLayer: (f, ll) => L.marker(ll, { icon: turbineIcon })
+              }).addTo(map);
               overlays['Turbines'] = turbineLayer;
               map.fitBounds(turbineLayer.getBounds());
               if (extentLayer) map.removeLayer(extentLayer);
@@ -197,8 +208,8 @@
       legend.onAdd = function() {
         const div = L.DomUtil.create('div', 'legend');
         div.innerHTML =
-          '<i style="background: blue"></i> Turbines<br>' +
-          '<img src="https://cdn-icons-png.flaticon.com/512/2661/2661370.png" width="12" style="margin-right:6px;">Substation<br>' +
+          '<img src="https://i.postimg.cc/2yjnQrHg/file-00000000f62c6230bf7aac82f2d385d7.png" width="12" style="margin-right:6px;" alt="Wind turbine icon">Turbines<br>' +
+          '<img src="https://i.postimg.cc/WzxvPbJk/file-00000000fe0061f7b8f27bf449c455c1-2.png" width="12" style="margin-right:6px;" alt="Substation icon">Substation<br>' +
           '<i style="background: orange"></i> Obstacles<br>' +
           '<i style="background: green"></i> Route';
         return div;
