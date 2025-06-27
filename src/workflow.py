@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from zipfile import ZipFile
 import re
+import xml.etree.ElementTree as ET
 
 import geopandas as gpd
 import fiona
@@ -107,6 +108,7 @@ def turbines_to_extents_yaml(turbines_yaml: Path, extents_yaml: Path) -> None:
         f.write(f"  C {dms_C[0]} {dms_C[1]}\n")
         f.write(f"  D {dms_D[0]} {dms_D[1]}\n")
 
+
 def create_extent(
     points: gpd.GeoDataFrame, buffer: float = 0.01
 ) -> tuple[float, float, float, float]:
@@ -154,9 +156,47 @@ def export_folium_map(layers: Dict[str, gpd.GeoDataFrame], path: Path) -> None:
 
 
 def csv_to_yaml(csv_path: Path, yaml_path: Path) -> None:
-    """Convert a CSV or Excel file to a YAML representation."""
+    """Convert a spreadsheet or KML file to a YAML representation."""
 
-    if csv_path.suffix.lower() in {".xlsx", ".xls"}:
+    suffix = csv_path.suffix.lower()
+
+    if suffix in {".kml", ".kmz"}:
+        # parse KML/KMZ placemarks like ``full_yaml.py`` does
+        def load_root(p: Path) -> ET.Element:
+            if p.suffix.lower() == ".kmz":
+                with ZipFile(p, "r") as kmz:
+                    name = next(n for n in kmz.namelist() if n.lower().endswith(".kml"))
+                    with kmz.open(name) as kmlf:
+                        return ET.parse(kmlf).getroot()
+            return ET.parse(p).getroot()
+
+        def dec_to_dms(val: float, is_lat: bool) -> str:
+            deg = int(abs(val))
+            minutes = (abs(val) - deg) * 60
+            hemi = "N" if is_lat else "E"
+            if val < 0:
+                hemi = "S" if is_lat else "W"
+            return f"{deg}\u00b0{minutes:.3f}'{hemi}"
+
+        ns = {"kml": "http://www.opengis.net/kml/2.2"}
+        root = load_root(csv_path)
+        lines = []
+        for pm in root.findall(".//kml:Placemark", ns):
+            name = pm.findtext("kml:name", default="", namespaces=ns)
+            coord = pm.findtext(".//kml:coordinates", default="", namespaces=ns)
+            if coord:
+                lon, lat = map(float, coord.split(",")[:2])
+                lines.append(
+                    f"[{name}] {dec_to_dms(lat, True)} {dec_to_dms(lon, False)}"
+                )
+
+        with open(yaml_path, "w", encoding="utf-8") as f:
+            f.write("SUBSTATIONS: |-\n")
+            for ln in lines:
+                f.write(f"  {ln}\n")
+        return
+
+    if suffix in {".xlsx", ".xls"}:
         df = pd.read_excel(csv_path)
     else:
         try:
@@ -470,7 +510,9 @@ def export_H_to_kml(
             else:
                 p.style.iconstyle.scale = 0.5
 
-    print(f"Drew {H.number_of_edges() - len(skipped)} edges; skipped {len(skipped)} invalid.")
+    print(
+        f"Drew {H.number_of_edges() - len(skipped)} edges; skipped {len(skipped)} invalid."
+    )
     if str(filepath).lower().endswith(".kmz"):
         kml.savekmz(str(filepath))
     else:
@@ -495,7 +537,8 @@ def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
     from interarray.EW_presolver import EW_presolver
     import interarray.MILP.pyomo as omo
     from interarray.interface import assign_cables
-    cbcer = pyo.SolverFactory('cbc')
+
+    cbcer = pyo.SolverFactory("cbc")
 
     cable_costs = [75, 80, 90, 100]
     turbines_per_cable = [5, 11, 20, 43]
@@ -516,33 +559,34 @@ def generate_optimized_route(site_yaml: Path, output_kmz: Path) -> None:
     P, A = make_planar_embedding(L)
     S_pre = EW_presolver(A, capacity)
     G_pre = G_from_S(S_pre, A)
-    G_pre.size('weight = length')
-    #gplot(G_pre, landscape=False)
+    G_pre.size("weight = length")
+    # gplot(G_pre, landscape=False)
     H_pre = PathFinder(G_pre, planar=P, A=A).create_detours()
     # gplot(H_pre, landscape=False);
     model = omo.make_min_length_model(
-        A, capacity,
-        gateXings_constraint=False,
-        gates_limit=False,
-        branching=True
+        A, capacity, gateXings_constraint=False, gates_limit=False, branching=True
     )
-    omo.warmup_model(model, S_pre);
-    cbcer.options.update(dict(
-        ratioGap=0.005,
-        seconds=60,
-        timeMode='elapsed',
-        threads=8,
-        # if repeatable results are desired, set the seed
-        RandomCbcSeed=4321,
-        # the parameters below and more can be experimented with
-        # http://www.decom.ufop.br/haroldo/files/cbcCommandLine.pdf
-        Dins='on',
-        VndVariableNeighborhoodSearch='on',
-        #strategy=2,
-        #PassFeasibilityPump=100,  # not used if warm-started
-        #ProximitySearch='on',
-    ))
-    print(f'Solving "{model.handle}": {{R={len(model.R)}, T={len(model.T)}, k={model.k.value}}}\n')
+    omo.warmup_model(model, S_pre)
+    cbcer.options.update(
+        dict(
+            ratioGap=0.005,
+            seconds=60,
+            timeMode="elapsed",
+            threads=8,
+            # if repeatable results are desired, set the seed
+            RandomCbcSeed=4321,
+            # the parameters below and more can be experimented with
+            # http://www.decom.ufop.br/haroldo/files/cbcCommandLine.pdf
+            Dins="on",
+            VndVariableNeighborhoodSearch="on",
+            # strategy=2,
+            # PassFeasibilityPump=100,  # not used if warm-started
+            # ProximitySearch='on',
+        )
+    )
+    print(
+        f'Solving "{model.handle}": {{R={len(model.R)}, T={len(model.T)}, k={model.k.value}}}\n'
+    )
     result = cbcer.solve(model, warmstart=model.warmed_by, tee=True)
     S = omo.S_from_solution(model, cbcer, result)
     G = G_from_S(S, A)
@@ -595,7 +639,7 @@ def build_site_yaml(
         hemi = "N" if is_lat else "E"
         if val < 0:
             hemi = "S" if is_lat else "W"
-        return f"{deg}\u00B0{minutes:.3f}'{hemi}"
+        return f"{deg}\u00b0{minutes:.3f}'{hemi}"
 
     # --- Turbine lines ---
     turbine_lines = [
@@ -668,4 +712,3 @@ def build_site_yaml(
         f.write("\nOBSTACLES:\n")
         for item in obstacles_list:
             f.write(f"- '{item}'\n")
-
