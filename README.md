@@ -103,6 +103,19 @@ definition:
 The script uses the same logic as the API to convert coordinates and
 produces ``site.yaml`` ready for optimisation.
 
+### Process a site manually
+
+If you want to replicate the `/process` API endpoint from the command line, use
+``process_site.py``.  It builds the site YAML, cleans invalid obstacles and can
+also run the optimisation to produce a route KMZ:
+
+```bash
+./process_site.py turbines.xlsx substation.kmz obstacles.gpkg out_dir
+```
+
+Pass ``--no-clean`` to keep the raw obstacles or ``--no-route`` if you only
+need the YAML.
+
 ### Quick map viewer
 
 Navigate to `/map` to access a simple viewer for plotting turbine and substation files on a Leaflet map. Upload turbine coordinates as `.xlsx`, `.csv`, or `.yaml` and optional substation data as `.kmz`. The `/upload` endpoint converts the data to GeoJSON and also returns a bounding-box layer when turbines are provided.
