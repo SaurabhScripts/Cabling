@@ -712,3 +712,59 @@ def build_site_yaml(
         f.write("\nOBSTACLES:\n")
         for item in obstacles_list:
             f.write(f"- '{item}'\n")
+
+
+def clean_site_yaml(combined_yaml_path: Path) -> Path:
+    """Remove invalid obstacles from a site YAML file.
+
+    The helper tries to load the site using ``interarray`` with each
+    obstacle individually. Obstacles that cause errors are discarded and a
+    cleaned YAML is written next to the input file. The output file name is
+    fixed to ``final_Serentica_no_bad_obstacles_processed_27June.yaml`` as in
+    the original notebook.
+
+    Parameters
+    ----------
+    combined_yaml_path:
+        Path to the YAML file containing an ``OBSTACLES`` section.
+
+    Returns
+    -------
+    Path
+        Path to the cleaned YAML file.
+    """
+
+    from interarray.importer import L_from_yaml
+    from interarray.mesh import make_planar_embedding
+
+    output_yaml_path = combined_yaml_path.with_name(
+        "final_Serentica_no_bad_obstacles_processed_27June.yaml"
+    )
+
+    data = yaml.safe_load(combined_yaml_path.read_text(encoding="utf-8"))
+    obstacles = data.get("OBSTACLES", [])
+
+    good_obstacles: list[str] = []
+
+    for idx, obs in enumerate(obstacles):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / "single_obs.yaml"
+            test_data = {k: v for k, v in data.items() if k != "OBSTACLES"}
+            test_data["OBSTACLES"] = [obs]
+            with open(tmp_path, "w", encoding="utf-8") as tf:
+                yaml.safe_dump(test_data, tf, sort_keys=False, allow_unicode=True)
+            try:
+                L = L_from_yaml(tmp_path, handle=f"SingleObs{idx}")
+                make_planar_embedding(L)
+            except Exception:
+                continue
+            else:
+                good_obstacles.append(obs)
+
+    cleaned = {k: v for k, v in data.items() if k != "OBSTACLES"}
+    cleaned["OBSTACLES"] = good_obstacles
+
+    with open(output_yaml_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cleaned, f, sort_keys=False, allow_unicode=True)
+
+    return output_yaml_path
