@@ -619,7 +619,7 @@ from interarray.mesh import make_planar_embedding
 
 # Path to your combined YAML with OBSTACLES
 combined_yaml_path = Path(r"F:\Route optimisation RE\interarray\notebooks\Results\final_Serentica_final_extent.yaml")
-output_yaml_path = combined_yaml_path.with_name("final_Serentica_no_bad_obstacles.yaml")
+output_yaml_path = combined_yaml_path.with_name("final_Serentica_no_bad_obstacles_processed_27June.yaml")
 
 # Load full data
 with open(combined_yaml_path, 'r', encoding='utf-8') as f:
