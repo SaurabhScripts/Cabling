@@ -26,6 +26,7 @@ from .workflow import (
     load_yaml_points,
     generate_optimized_route,
     build_site_yaml,
+    clean_site_yaml,
 )
 from .crossings import load_osm_roads, load_osm_powerlines, count_crossings
 
@@ -111,6 +112,9 @@ async def process_files(
 
     if turbines and substation and obstacles:
         build_site_yaml(turbine_path, sub_path, obstacle_path, site_yaml)
+        # also create a cleaned version of the site YAML with invalid
+        # obstacles removed
+        clean_site_yaml(site_yaml)
 
     # extent layer based on available data
     extent_source = turbines_gdf
