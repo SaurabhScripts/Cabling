@@ -6,6 +6,7 @@
   <title>Wind Turbine Map Viewer</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
     body, html { margin: 0; padding: 0; height: 100%; }
     #controls {
@@ -31,6 +32,10 @@
       margin-right: 6px;
       opacity: 0.8;
     }
+    .download-link {
+      text-decoration: none;
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -47,6 +52,7 @@
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.4/leaflet-omnivore.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -78,19 +84,61 @@
 
       function updateLayers() {
         layerControl.remove();
-        layerControl = L.control.layers(baseMaps, overlays).addTo(map);
+        const display = {};
+        for (const [name, layer] of Object.entries(overlays)) {
+          const label = `${name}<a href="#" class="download-link" data-layer="${name}" title="Download GeoJSON">&#128229;</a>`;
+          display[label] = layer;
+        }
+        layerControl = L.control.layers(baseMaps, display).addTo(map);
+        document.querySelectorAll('.download-link').forEach(el => {
+          el.addEventListener('click', e => {
+            e.preventDefault();
+            const lname = e.currentTarget.getAttribute('data-layer');
+            const lyr = overlays[lname];
+            if (!lyr) return;
+            const data = lyr.toGeoJSON();
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${lname}.geojson`;
+            a.click();
+            URL.revokeObjectURL(url);
+          });
+        });
       }
 
       let turbineLayer;
       let extentLayer;
       let substationLayer;
-      let obstacleLayer;
+      let obstacleLayer = new L.FeatureGroup().addTo(map);
       let routeLayer;
       const turbineInput = document.getElementById('turbineInput');
       const substationInput = document.getElementById('substationInput');
       const obstacleInput = document.getElementById('obstacleInput');
       const siteInput = document.getElementById('siteInput');
       const routeBtn = document.getElementById('routeBtn');
+
+      const drawControl = new L.Control.Draw({
+        edit: { featureGroup: obstacleLayer },
+        draw: {
+          polygon: true,
+          polyline: true,
+          marker: false,
+          circle: false,
+          rectangle: false,
+          circlemarker: false
+        }
+      });
+      map.addControl(drawControl);
+
+      map.on(L.Draw.Event.CREATED, e => {
+        obstacleLayer.addLayer(e.layer);
+        overlays['Obstacles'] = obstacleLayer;
+        updateLayers();
+      });
+      map.on('draw:edited', updateLayers);
+      map.on('draw:deleted', updateLayers);
 
       const turbineIcon = L.icon({
         iconUrl: 'https://i.postimg.cc/2yjnQrHg/file-00000000f62c6230bf7aac82f2d385d7.png',
@@ -146,11 +194,11 @@
               }
               updateLayers();
             } else if (type === 'obstacle') {
-              if (obstacleLayer) map.removeLayer(obstacleLayer);
-              obstacleLayer = L.geoJSON(data.geojson, {
+              obstacleLayer.clearLayers();
+              L.geoJSON(data.geojson, {
                 style: { color: 'orange' },
                 pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: 'orange' })
-              }).addTo(map);
+              }).eachLayer(l => obstacleLayer.addLayer(l));
               overlays['Obstacles'] = obstacleLayer;
               updateLayers();
             }
